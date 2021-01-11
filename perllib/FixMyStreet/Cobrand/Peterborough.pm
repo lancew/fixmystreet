@@ -156,4 +156,27 @@ sub munge_report_new_contacts {
     $self->SUPER::munge_report_new_contacts($categories);
 }
 
+
+sub bin_addresses_for_postcode {
+    my $self = shift;
+    my $pc = shift;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+    my $premises = $bartec->Premises_Get($pc);
+    my $data = [ map { {
+        value => $pc . ":" . $_->{UPRN},
+        label => $self->_format_address($_),
+    } } @$premises ];
+    natkeysort_inplace { $_->{label} } @$data;
+    return $data;
+}
+
+sub _format_address {
+    my ($self, $property) = @_;
+
+    my $a = $property->{Address};
+    return Utils::trim_text(FixMyStreet::Template::title(join(" ", $a->{Address1}, $a->{Address2}, $a->{Street}, $a->{Town})));
+}
+
 1;
