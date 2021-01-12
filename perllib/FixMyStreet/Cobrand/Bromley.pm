@@ -6,8 +6,12 @@ use warnings;
 use utf8;
 use DateTime::Format::W3CDTF;
 use DateTime::Format::Flexible;
+use File::Temp;
 use Integrations::Echo;
+use JSON::MaybeXS;
+use Parallel::ForkManager;
 use Sort::Key::Natural qw(natkeysort_inplace);
+use Storable;
 use Try::Tiny;
 use FixMyStreet::DateRange;
 use FixMyStreet::WorkingDays;
@@ -426,7 +430,7 @@ sub bin_addresses_for_postcode {
     $echo = Integrations::Echo->new(%$echo);
     my $points = $echo->FindPoints($pc);
     my $data = [ map { {
-        value => $_->{SharedRef}{Value}{anyType},
+        value => $_->{Id},
         label => FixMyStreet::Template::title($_->{Description}),
     } } @$points ];
     natkeysort_inplace { $_->{label} } @$data;
@@ -435,11 +439,9 @@ sub bin_addresses_for_postcode {
 
 sub look_up_property {
     my $self = shift;
-    my $uprn = shift;
+    my $id = shift;
 
     my $cfg = $self->feature('echo');
-    my $echo = Integrations::Echo->new(%$cfg);
-
     if ($cfg->{max_per_day}) {
         my $today = DateTime->today->set_time_zone(FixMyStreet->local_time_zone)->ymd;
         my $ip = $self->{c}->req->address;
@@ -448,10 +450,18 @@ sub look_up_property {
         $self->{c}->detach('/page_error_403_access_denied', []) if $count > $cfg->{max_per_day};
     }
 
-    my $result = $echo->GetPointAddress($uprn);
+    my $calls = $self->call_api(
+        GetPointAddress => [ $id ],
+        GetServiceUnitsForObject => [ $id ],
+        GetEventsForObject => [ 'PointAddress', $id ],
+    );
+
+    $self->{api_serviceunits} = $calls->{"GetServiceUnitsForObject $id"};
+    $self->{api_events} = $calls->{"GetEventsForObject PointAddress $id"};
+    my $result = $calls->{"GetPointAddress $id"};
     return {
         id => $result->{Id},
-        uprn => $uprn,
+        uprn => $result->{SharedRef}{Value}{anyType},
         address => FixMyStreet::Template::title($result->{Description}),
         latitude => $result->{Coordinates}{GeoPoint}{Latitude},
         longitude => $result->{Coordinates}{GeoPoint}{Longitude},
@@ -536,16 +546,15 @@ sub bin_services_for_address {
         544 => 4,
     );
 
-    my $echo = $self->feature('echo');
-    $echo = Integrations::Echo->new(%$echo);
-    my $result = $echo->GetServiceUnitsForObject($property->{uprn});
+    my $result = $self->{api_serviceunits};
     return [] unless @$result;
 
-    my $events = $echo->GetEventsForObject('PointAddress', $property->{id});
+    my $events = $self->{api_events};
     my $open = $self->_parse_open_events($events);
 
-    my @out;
-    my %task_ref_to_row;
+    my @to_fetch;
+    my %schedules;
+    my @task_refs;
     foreach (@$result) {
         next unless $_->{ServiceTasks};
 
@@ -553,8 +562,22 @@ sub bin_services_for_address {
         my $schedules = _parse_schedules($servicetask);
 
         next unless $schedules->{next} or $schedules->{last};
+        $schedules{$_->{Id}} = $schedules;
+        push @to_fetch, GetEventsForObject => [ ServiceUnit => $_->{Id} ];
+        push @task_refs, $schedules->{last}{ref} if $schedules->{last};
+    }
+    push @to_fetch, GetTasks => \@task_refs if @task_refs;
 
-        my $events = $echo->GetEventsForObject('ServiceUnit', $_->{Id});
+    my $calls = $self->call_api(@to_fetch);
+
+    my @out;
+    my %task_ref_to_row;
+    foreach (@$result) {
+        next unless $schedules{$_->{Id}};
+        my $schedules = $schedules{$_->{Id}};
+        my $servicetask = $_->{ServiceTasks}{ServiceTask};
+
+        my $events = $calls->{"GetEventsForObject ServiceUnit $_->{Id}"};
         my $open_unit = $self->_parse_open_events($events);
 
         my $containers = $service_to_containers{$_->{ServiceId}};
@@ -583,7 +606,7 @@ sub bin_services_for_address {
         push @out, $row;
     }
     if (%task_ref_to_row) {
-        my $tasks = $echo->GetTasks(map { $_->{last}{ref} } values %task_ref_to_row);
+        my $tasks = $calls->{GetTasks};
         my $now = DateTime->now->set_time_zone(FixMyStreet->local_time_zone);
         foreach (@$tasks) {
             my $ref = join(',', @{$_->{Ref}{Value}{anyType}});
@@ -591,7 +614,8 @@ sub bin_services_for_address {
             my $state = $_->{State}{Name} || '';
             my $task_type_id = $_->{TaskTypeId} || '';
 
-            my $resolution = $_->{Resolution}{Name} || '';
+            my $orig_resolution = $_->{Resolution}{Name} || '';
+            my $resolution = $orig_resolution;
             my $resolution_id = $_->{Resolution}{Ref}{Value}{anyType};
             if ($resolution_id) {
                 my $template = FixMyStreet::DB->resultset('ResponseTemplate')->search({
@@ -627,7 +651,7 @@ sub bin_services_for_address {
             }
 
             # If the task is ended and could not be done, do not allow reporting
-            if ($state eq 'Not Completed' || ($state eq 'Completed' && $_->{Resolution}{Name} eq 'Excess Waste')) {
+            if ($state eq 'Not Completed' || ($state eq 'Completed' && $orig_resolution eq 'Excess Waste')) {
                 $row->{report_allowed} = 0;
                 $row->{report_locked_out} = 1;
             }
@@ -673,6 +697,7 @@ sub _parse_open_events {
 
 sub _parse_schedules {
     my $servicetask = shift;
+    return unless $servicetask->{ServiceTaskSchedules};
     my $schedules = $servicetask->{ServiceTaskSchedules}{ServiceTaskSchedule};
     $schedules = [ $schedules ] unless ref $schedules eq 'ARRAY';
 
@@ -923,6 +948,54 @@ sub admin_templates_external_status_code_hook {
     my $task_state = $c->get_param('task_state') || '';
 
     return "$res_code,$task_type,$task_state";
+}
+
+sub call_api {
+    my $self = shift;
+
+    my $tmp = File::Temp->new;
+    my @cmd = (
+        FixMyStreet->path_to('bin/fixmystreet.com/bromley-echo'),
+        '--out', $tmp,
+        '--calls', encode_json(\@_),
+    );
+
+    # We cannot fork directly under mod_fcgid, so
+    # call an external script that calls back in.
+    my $data;
+    if (FixMyStreet->test_mode) {
+        $data = $self->_parallel_api_calls(@_);
+    } else {
+        system(@cmd);
+        $data = Storable::fd_retrieve($tmp);
+    }
+    return $data;
+}
+
+sub _parallel_api_calls {
+    my $self = shift;
+    my $echo = $self->feature('echo');
+    $echo = Integrations::Echo->new(%$echo);
+
+    my %calls;
+    my $pm = Parallel::ForkManager->new(FixMyStreet->test_mode ? 0 : 10);
+    $pm->run_on_finish(sub {
+        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data) = @_;
+        %calls = ( %calls, %$data );
+    });
+
+    while (@_) {
+        my $call = shift;
+        my $args = shift;
+        $pm->start and next;
+        my $result = $echo->$call(@$args);
+        my $key = "$call @$args";
+        $key = $call if $call eq 'GetTasks';
+        $pm->finish(0, { $key => $result });
+    }
+    $pm->wait_all_children;
+
+    return \%calls;
 }
 
 1;

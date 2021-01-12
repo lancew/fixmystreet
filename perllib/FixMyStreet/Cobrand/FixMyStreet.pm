@@ -318,6 +318,16 @@ sub updates_disallowed {
     return $self->next::method(@_);
 }
 
+sub body_disallows_state_change {
+    my $self = shift;
+    my ($problem) = @_;
+    my $c = $self->{c};
+
+    my ($disallowed, $body) = $self->per_body_config('update_states_disallowed', $problem);
+    $disallowed //= 0;
+    return $disallowed;
+}
+
 sub problem_state_processed {
     my ($self, $comment) = @_;
 
@@ -343,7 +353,7 @@ sub suppress_reporter_alerts {
 
 sub must_have_2fa {
     my ($self, $user) = @_;
-    return 1 if $user->is_superuser;
+    return 1 if $user->is_superuser && !FixMyStreet->staging_flag('skip_must_have_2fa');
     return 1 if $user->from_body && $user->from_body->name eq 'TfL';
     return 0;
 }

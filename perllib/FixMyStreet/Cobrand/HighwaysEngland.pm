@@ -4,6 +4,8 @@ use parent 'FixMyStreet::Cobrand::UK';
 use strict;
 use warnings;
 
+sub council_name { 'Highways England' }
+
 sub council_url { 'highwaysengland' }
 
 sub site_key { 'highwaysengland' }
@@ -28,6 +30,8 @@ sub problems_sql_restriction { FixMyStreet::Cobrand::UKCouncils::problems_sql_re
 sub users_restriction { FixMyStreet::Cobrand::UKCouncils::users_restriction($_[0], $_[1]) }
 sub updates_restriction { FixMyStreet::Cobrand::UKCouncils::updates_restriction($_[0], $_[1]) }
 sub base_url { FixMyStreet::Cobrand::UKCouncils::base_url($_[0]) }
+sub contact_name { FixMyStreet::Cobrand::UKCouncils::contact_name($_[0]) }
+sub contact_email { FixMyStreet::Cobrand::UKCouncils::contact_email($_[0]) }
 
 sub munge_problem_list {
     my ($self, $problem) = @_;
@@ -87,6 +91,8 @@ sub allow_photo_upload { 0 }
 sub allow_anonymous_reports { 'button' }
 
 sub admin_user_domain { 'highwaysengland.co.uk' }
+
+sub abuse_reports_only { 1 }
 
 sub anonymous_account {
     my $self = shift;
@@ -162,6 +168,28 @@ sub report_new_is_on_he_road {
     my $ukc = FixMyStreet::Cobrand::UKCouncils->new;
     my $features = $ukc->_fetch_features($cfg, $x, $y);
     return scalar @$features ? 1 : 0;
+}
+
+sub dashboard_export_problems_add_columns {
+    my ($self, $csv) = @_;
+
+    $csv->modify_csv_header( "Site Used" => 'Device Type' );
+
+    $csv->add_csv_columns(
+        area_name => 'Area name',
+        where_hear => 'How you found us',
+        cobrand => 'Site Used',
+    );
+
+    $csv->csv_extra_data(sub {
+        my $report = shift;
+
+        return {
+            area_name => $report->get_extra_field_value('area_name'),
+            where_hear => $report->get_extra_metadata('where_hear'),
+            cobrand => $report->cobrand,
+        };
+    });
 }
 
 1;

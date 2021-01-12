@@ -25,10 +25,14 @@ sub get_geocoder {
     return 'OSM'; # default of Bing gives poor results, let's try overriding.
 }
 
+sub map_type { 'OSM'; }
+
 sub enter_postcode_text {
     my ($self) = @_;
     return 'Enter a ' . $self->council_area . ' postcode, or street name';
 }
+
+sub front_stats_show_middle { 'none' }
 
 sub send_questionnaires { 0 }
 

@@ -1,4 +1,4 @@
-[% RETURN IF problem.to_body_named('TfL') OR problem.to_body_named('Hounslow') %]
+[% RETURN IF c.cobrand.body_disallows_state_change(problem) %]
 
 [% IF (problem.is_fixed OR problem.is_closed) AND ((c.user_exists AND c.user.id == problem.user_id) OR alert_to_reporter) %]
 

@@ -807,7 +807,7 @@ sub defect_types {
 #     Note:   this only makes sense when called on a problem that has been sent!
 sub can_display_external_id {
     my $self = shift;
-    if ($self->external_id && $self->to_body_named('Oxfordshire|Lincolnshire|Isle of Wight|East Sussex')) {
+    if ($self->external_id && $self->to_body_named('Oxfordshire|Lincolnshire|Isle of Wight|East Sussex|Central Bedfordshire')) {
         return 1;
     }
     return 0;
@@ -1142,6 +1142,15 @@ has alerts => (
         return $self->result_source->schema->resultset('Alert')->search({
             alert_type => 'new_updates', parameter => $self->id
         });
+    },
+);
+
+has comment_count => (
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        $self->comments->count;
     },
 );
 

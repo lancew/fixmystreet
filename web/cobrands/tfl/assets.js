@@ -149,7 +149,6 @@ var asset_defaults = $.extend(true, {}, defaults, {
     class: OpenLayers.Layer.TfLVectorAsset,
     body: 'TfL',
     select_action: true,
-    no_asset_msg_id: '#js-not-an-asset',
     actions: {
         asset_found: fixmystreet.message_controller.asset_found,
         asset_not_found: fixmystreet.message_controller.asset_not_found
@@ -241,7 +240,14 @@ fixmystreet.assets.add(asset_defaults, {
             return false;
         }
         red_routes = red_routes[0];
-        return red_routes.getFeaturesWithinDistance(feature.geometry, 10).length > 0;
+
+        var point = feature.geometry;
+        var relevant = !!red_routes.getFeatureAtPoint(point);
+        if (!relevant) {
+            var nearest = red_routes.getFeaturesWithinDistance(point, 10);
+            relevant = nearest.length > 0;
+        }
+        return relevant;
     },
     select_action: true,
     actions: {

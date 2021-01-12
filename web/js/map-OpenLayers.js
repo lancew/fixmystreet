@@ -105,7 +105,9 @@ $.extend(fixmystreet.utils, {
         activate: function() {
             this._drag = new OpenLayers.Control.DragFeatureFMS( fixmystreet.markers, {
                 onComplete: function(feature, e) {
-                    fixmystreet.update_pin( feature.geometry );
+                    var geom = feature.geometry,
+                        lonlat = new OpenLayers.LonLat(geom.x, geom.y);
+                    fixmystreet.display.begin_report(lonlat, { noPan: true });
                 }
             } );
             fixmystreet.map.addControl( this._drag );
@@ -120,13 +122,6 @@ $.extend(fixmystreet.utils, {
 
     $.extend(fixmystreet.maps, {
       update_pin: function(lonlat) {
-        // This function might be passed either an OpenLayers.LonLat (so has
-        // lon and lat), or an OpenLayers.Geometry.Point (so has x and y).
-        if (lonlat.x !== undefined && lonlat.y !== undefined) {
-            // It's a Point, convert to a LatLon
-            lonlat = new OpenLayers.LonLat(lonlat.x, lonlat.y);
-        }
-
         var transformedLonlat = lonlat.clone().transform(
             fixmystreet.map.getProjectionObject(),
             new OpenLayers.Projection("EPSG:4326")
@@ -198,7 +193,7 @@ $.extend(fixmystreet.utils, {
         // link so that it updates the text in case they go
         // back
         if ( ! fixmystreet.markers.getVisibility() ) {
-            $('#hide_pins_link').click();
+            $('.map-pins-toggle').click();
         }
         return lonlat;
       },
@@ -484,6 +479,20 @@ $.extend(fixmystreet.utils, {
           control.events.register("locationupdated", null, updateGeolocationMarker);
           fixmystreet.map.addControl(control);
           control.activate();
+      },
+      toggle_base: function(e) {
+          e.preventDefault();
+          var $this = $(this);
+          var aerial = fixmystreet.maps.base_layer_aerial ? 0 : 1;
+          if ($this.text() == translation_strings.map_aerial) {
+              $this.text(translation_strings.map_roads);
+              $(this).toggleClass('roads aerial');
+              fixmystreet.map.setBaseLayer(fixmystreet.map.layers[aerial]);
+          } else {
+              $this.text(translation_strings.map_aerial);
+              $(this).toggleClass('roads aerial');
+              fixmystreet.map.setBaseLayer(fixmystreet.map.layers[1-aerial]);
+          }
       }
     });
 
@@ -513,7 +522,10 @@ $.extend(fixmystreet.utils, {
         }
     }
 
-    function marker_click(problem_id, evt) {
+    function marker_click(feature, evt) {
+        $(fixmystreet).trigger('maps:marker_click', feature);
+
+        var problem_id = feature.attributes.id;
         var $a = $('.item-list a[href$="/' + problem_id + '"]');
         if (!$a[0]) {
             return;
@@ -806,11 +818,6 @@ $.extend(fixmystreet.utils, {
             });
         }
         fixmystreet.markers = new OpenLayers.Layer.Vector("Pins", pin_layer_options);
-        fixmystreet.markers.events.register( 'loadend', fixmystreet.markers, function(evt) {
-            if (fixmystreet.map.popups.length) {
-                fixmystreet.map.removePopup(fixmystreet.map.popups[0]);
-            }
-        });
         fixmystreet.markers.events.register( 'loadstart', null, fixmystreet.maps.loading_spinner.show);
         fixmystreet.markers.events.register( 'loadend', null, fixmystreet.maps.loading_spinner.hide);
         OpenLayers.Request.XMLHttpRequest.onabort = function() {
@@ -828,7 +835,7 @@ $.extend(fixmystreet.utils, {
                     // Override clickFeature so that we can use it even though
                     // hover is true. http://gis.stackexchange.com/a/155675
                     clickFeature: function (feature) {
-                        marker_click(feature.attributes.id, this.handlers.feature.evt);
+                        marker_click(feature, this.handlers.feature.evt);
                     },
                     overFeature: function (feature) {
                         if (fixmystreet.latest_map_hover_event != 'overFeature') {
@@ -896,16 +903,16 @@ $.extend(fixmystreet.utils, {
             zoomToBounds( fixmystreet.markers.getDataExtent() );
         }
 
-        $('#hide_pins_link, .big-hide-pins-link').click(function(e) {
+        $('.map-pins-toggle').click(function(e) {
             e.preventDefault();
             if (this.innerHTML == translation_strings.show_pins) {
                 fixmystreet.markers.setVisibility(true);
                 fixmystreet.select_feature.activate();
-                $('#hide_pins_link, .big-hide-pins-link').html(translation_strings.hide_pins);
+                $('.map-pins-toggle').html(translation_strings.hide_pins);
             } else if (this.innerHTML == translation_strings.hide_pins) {
                 fixmystreet.markers.setVisibility(false);
                 fixmystreet.select_feature.deactivate();
-                $('#hide_pins_link, .big-hide-pins-link').html(translation_strings.show_pins);
+                $('.map-pins-toggle').html(translation_strings.show_pins);
             }
             if (typeof ga !== 'undefined') {
                 ga('send', 'event', 'toggle-pins-on-map', 'click');
@@ -1327,6 +1334,12 @@ OpenLayers.Control.Click = OpenLayers.Class(OpenLayers.Control, {
     },
 
     trigger: function(e) {
+        if ($(e.target).hasClass('olPopupCloseBox')) {
+            // Ignore clicks that are closing popups
+            return;
+        }
+        $(fixmystreet).trigger('maps:click');
+
         // If we are looking at an individual report, and the report was
         // ajaxed into the DOM from the all reports page, then clicking
         // the map background should take us back to the all reports list.

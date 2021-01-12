@@ -3,6 +3,8 @@ use parent 'FixMyStreet::Cobrand::Whitelabel';
 
 use strict;
 use warnings;
+use JSON::MaybeXS;
+use URI::Escape;
 use mySociety::EmailUtil qw(is_valid_email is_valid_email_list);
 
 sub council_area_id { return 2508; }
@@ -59,6 +61,46 @@ sub geocoder_munge_results {
     $result->{display_name} =~ s/, London Borough of Hackney//;
 }
 
+sub addresses_for_postcode {
+    my ($self, $postcode) = @_;
+
+    my $api = $self->feature('address_api');
+    my $url = $api->{url};
+    my $key = $api->{key};
+
+    $url .= '?format=detailed&postcode=' . uri_escape_utf8($postcode);
+    my $ua = LWP::UserAgent->new;
+    $ua->default_header(Authorization => $key);
+
+    my $pages = 1;
+    my @addresses;
+    my $outside;
+    for (my $page = 1; $page <= $pages; $page++) {
+        my $res = $ua->get($url . '&page=' . $page);
+        my $data = decode_json($res->decoded_content);
+        $pages = $data->{data}->{pageCount} || 0;
+        foreach my $address (@{$data->{data}->{address}}) {
+            unless ($address->{locality} eq 'HACKNEY') {
+                $outside = 1;
+                next;
+            }
+            my $string = join(", ",
+                grep { $_ && $_ ne 'Hackney' }
+                map { s/((^\w)|(\s\w))/\U$1/g; $_ }
+                map { lc $address->{"line$_"} }
+                (1..3)
+            );
+            push @addresses, {
+                value => $address->{UPRN},
+                latitude => $address->{latitude},
+                longitude => $address->{longitude},
+                label => $string,
+            };
+        }
+    }
+    return { error => 'Sorry, that postcode appears to lie outside Hackney' } if !@addresses && $outside;
+    return { addresses => \@addresses };
+}
 
 sub open311_config {
     my ($self, $row, $h, $params) = @_;
@@ -81,9 +123,9 @@ sub open311_extra_data {
     ];
 
     # Make sure contact 'email' set correctly for Open311
-    if (my $sent_to = $row->get_extra_metadata('sent_to')) {
-        $row->unset_extra_metadata('sent_to');
-        my $code = $sent_to->{$contact->email};
+    if (my $split_match = $row->get_extra_metadata('split_match')) {
+        $row->unset_extra_metadata('split_match');
+        my $code = $split_match->{$contact->email};
         $contact->email($code) if $code;
     }
 
@@ -162,7 +204,7 @@ sub get_body_sender {
         } elsif ($self->problem_is_within_area_type($problem, 'estate')) {
             $to = $estate;
         }
-        $problem->set_extra_metadata(sent_to => { $contact->email => $to });
+        $problem->set_extra_metadata(split_match => { $contact->email => $to });
         if (is_valid_email($to)) {
             return { method => 'Email', contact => $contact };
         }
@@ -174,11 +216,22 @@ sub get_body_sender {
 sub munge_sendreport_params {
     my ($self, $row, $h, $params) = @_;
 
-    my $sent_to = $row->get_extra_metadata('sent_to') or return;
-    $row->unset_extra_metadata('sent_to');
+    if ($row->cobrand_data eq 'noise') {
+        my $name = $params->{To}[0][1];
+        my $emails = $self->feature('open311_email');
+        my $where = $row->get_extra_metadata('where');
+        if (my $recipient = $emails->{"noise_$where"}) {
+            my @emails = split(/,/, $recipient);
+            $params->{To} = [ map { [ $_, $name ] } @emails ];
+        }
+        return;
+    }
+
+    my $split_match = $row->get_extra_metadata('split_match') or return;
+    $row->unset_extra_metadata('split_match');
     for my $recip (@{$params->{To}}) {
         my ($email, $name) = @$recip;
-        $recip->[0] = $sent_to->{$email} if $sent_to->{$email};
+        $recip->[0] = $split_match->{$email} if $split_match->{$email};
     }
 }
 
@@ -202,6 +255,41 @@ sub validate_contact_email {
     my @emails = grep { $_ } $self->_split_emails($email);
     return unless @emails;
     return 1 if is_valid_email_list(join(",", @emails));
+}
+
+# We want to send confirmation emails only for Noise reports
+sub report_sent_confirmation_email {
+    my ($self, $report) = @_;
+    return 'id' if $report->cobrand_data eq 'noise';
+    return '';
+};
+
+sub dashboard_export_problems_add_columns {
+    my ($self, $csv) = @_;
+
+    $csv->add_csv_columns(
+        nearest_address => 'Nearest address',
+        nearest_address_postcode => 'Nearest postcode',
+        extra_details => "Extra details",
+    );
+
+    $csv->csv_extra_data(sub {
+        my $report = shift;
+
+        my $address = '';
+        my $postcode = '';
+
+        if ( $report->geocode ) {
+            $address = $report->geocode->{resourceSets}->[0]->{resources}->[0]->{name};
+            $postcode = $report->geocode->{resourceSets}->[0]->{resources}->[0]->{address}->{postalCode};
+        }
+
+        return {
+            nearest_address => $address,
+            nearest_address_postcode => $postcode,
+            extra_details => $report->get_extra_metadata('detailed_information') || '',
+        };
+    });
 }
 
 1;

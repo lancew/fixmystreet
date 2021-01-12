@@ -15,12 +15,26 @@ it('allows bus stop clicking outside London', function() {
 
     // Also check a category not on a red route
     cy.get('[id=category_group]').select('Mobile Crane Operation');
-    cy.contains('does not maintain this road');
+    cy.contains('does not maintain this road').should('be.visible');
+});
+
+it('shows TfL roadworks', function() {
+    cy.server();
+    cy.route('/report/new/ajax*').as('report-ajax');
+    cy.route('**/mapserver/tfl*roadworks*', 'fixture:tfl-roadworks.xml').as('roadworks');
+    cy.route('**/mapserver/tfl*RedRoutes*', 'fixture:tfl-tlrn.xml').as('tfl-tlrn');
+
+    cy.visit('http://tfl.localhost:3001/report/new?latitude=51.482286&longitude=-0.328163');
+    cy.wait('@report-ajax');
+    cy.get('[id=category_group]').select('Roadworks');
+    cy.contains('You can pick a roadworks from the map').should('be.visible');
+    cy.wait('@roadworks');
+    cy.contains('At the junction').should('be.visible');
 });
 
 it('does not show TfL categories outside London on .com', function() {
     cy.visit('http://fixmystreet.localhost:3001/report/new?latitude=51.345714&longitude=-0.227959');
-    cy.contains('We do not yet have details');
+    cy.contains('We do not yet have details').should('be.visible');
 });
 
 it('shows TfL categories inside London on .com', function() {

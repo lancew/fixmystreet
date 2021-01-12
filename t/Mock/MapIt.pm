@@ -40,6 +40,7 @@ my @PLACES = (
     [ 'BR1 3UH', 51.4021, 0.01578, 2482, 'Bromley Council', 'LBO' ],
     [ 'BR1 3UH', 51.402096, 0.015784, 2482, 'Bromley Council', 'LBO' ],
     [ 'BR1 3EF', 51.4039, 0.018697, 2482, 'Bromley Council', 'LBO' ],
+    [ '?', 51.466707, 0.181108, 2494, 'London Borough of Bexley', 'LBO' ],
     [ 'NN1 1NS', 52.236251, -0.892052, 2234, 'Northamptonshire County Council', 'CTY', 2397, 'Northampton Borough Council', 'DIS' ],
     [ 'NN1 2NS', 52.238301, -0.889992, 2234, 'Northamptonshire County Council', 'CTY', 2397, 'Northampton Borough Council', 'DIS' ],
     [ '?', 52.238827, -0.894970, 2234, 'Northamptonshire County Council', 'CTY', 2397, 'Northampton Borough Council', 'DIS' ],
@@ -59,6 +60,7 @@ my @PLACES = (
     [ 'OX28 4DS', 51.784721, -1.494453 ],
     [ 'E14 2DN', 51.508536, '0.000001' ],
     [ '?', 52.51093, -1.86514, 11809, 'West Midlands', 'EUR' ],
+    [ 'DA6 7AT', 51.45556, 0.15356, 2494, 'London Borough of Bexley', 'LBO' ],
     # Norway
     [ '3290', 59, 10, 709, 'Larvik', 'NKO', 7, 'Vestfold', 'NFY' ],
     [ '0045', "59.9", "10.9", 301, 'Oslo', 'NKO', 3, 'Oslo', 'NFY' ],

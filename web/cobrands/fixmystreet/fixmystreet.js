@@ -409,6 +409,18 @@ $.extend(fixmystreet.set_up, {
   category_change: function() {
     // Deal with changes to report category.
 
+    function text_update(id, str) {
+        var $id = $(id);
+        if (!$id.data('original')) {
+            $id.data('original', $id.text());
+        }
+        if (str) {
+            $id.text(str);
+        } else {
+            $id.text($id.data('original'));
+        }
+    }
+
     // On the new report form, does this by asking for details from the server.
     // Delegation is necessary because #form_category may be replaced during the lifetime of the page
     $("#problem_form").on("change.category", "select#form_category", function(){
@@ -423,10 +435,10 @@ $.extend(fixmystreet.set_up, {
         }
 
         var category = $(this).val(),
-            data = fixmystreet.reporting_data.by_category[category],
+            data = fixmystreet.reporting_data.by_category[category] || {},
             $category_meta = $('#category_meta');
 
-        if (data) {
+        if (!$.isEmptyObject(data)) {
             fixmystreet.bodies = data.bodies || [];
         } else {
             fixmystreet.bodies = fixmystreet.reporting_data.bodies || [];
@@ -435,13 +447,13 @@ $.extend(fixmystreet.set_up, {
             fixmystreet.body_overrides.clear();
         }
 
-        if (data && data.councils_text) {
+        if (data.councils_text) {
             fixmystreet.update_councils_text(data);
         } else {
             // Use the original returned texts
             fixmystreet.update_councils_text(fixmystreet.reporting_data);
         }
-        if (data && data.category_extra) {
+        if (data.category_extra) {
             if ( $category_meta.length ) {
                 $category_meta.replaceWith( data.category_extra );
                 var $new_category_meta = $('#category_meta');
@@ -455,7 +467,7 @@ $.extend(fixmystreet.set_up, {
         } else {
             $category_meta.empty();
         }
-        if (data && data.non_public) {
+        if (data.non_public) {
             $(".js-hide-if-private-category").hide();
             $(".js-hide-if-public-category").removeClass("hidden-js").show();
             $('#form_non_public').prop('checked', true).prop('disabled', true);
@@ -464,13 +476,16 @@ $.extend(fixmystreet.set_up, {
             $(".js-hide-if-public-category").hide();
             $('#form_non_public').prop('checked', false).prop('disabled', false);
         }
-        if (data && data.allow_anonymous) {
+        if (data.allow_anonymous) {
             $('.js-show-if-anonymous').removeClass('hidden-js');
         } else {
             $('.js-show-if-anonymous').addClass('hidden-js');
         }
 
-        if (fixmystreet.message_controller && data && data.disable_form && data.disable_form.questions) {
+        text_update('#title-hint', data.title_hint);
+        text_update('#detail-hint', data.detail_hint);
+
+        if (fixmystreet.message_controller && data.disable_form && data.disable_form.questions) {
             $.each(data.disable_form.questions, function(_, question) {
                 if (question.message && question.code) {
                     $('#form_' + question.code).on('change.category', function() {
@@ -652,7 +667,7 @@ $.extend(fixmystreet.set_up, {
   on_resize: function() {
     var last_type;
     $(window).on('resize', function() {
-        var type = Modernizr.mq('(min-width: 48em)') || $('html.ie8').length ? 'desktop' : 'mobile';
+        var type = Modernizr.mq('(min-width: 48em)') ? 'desktop' : 'mobile';
         if (last_type == type) { return; }
         if (type == 'mobile') {
             fixmystreet.resize_to.mobile_page();
@@ -907,6 +922,7 @@ $.extend(fixmystreet.set_up, {
           $('.btn--change-asset').click();
       }
 
+      $('html, body').scrollTop(0);
       $('html').toggleClass('map-fullscreen only-map');
       $(this).html(text).attr('class', btnClass);
 
@@ -1004,6 +1020,7 @@ $.extend(fixmystreet.set_up, {
     });
 
     $('.js-new-report-show-sign-in').click(function(e) {
+        e.preventDefault();
         $('.js-new-report-sign-in-shown').removeClass('hidden-js');
         $('.js-new-report-sign-in-hidden').addClass('hidden-js');
         focusFirstVisibleInput();
@@ -1016,7 +1033,8 @@ $.extend(fixmystreet.set_up, {
         focusFirstVisibleInput();
     });
 
-    $('.js-new-report-sign-in-forgotten').click(function() {
+    $('.js-new-report-sign-in-forgotten').click(function(e) {
+        e.preventDefault();
         $('.js-new-report-sign-in-shown').addClass('hidden-js');
         $('.js-new-report-sign-in-hidden').removeClass('hidden-js');
         $('.js-new-report-forgotten-shown').removeClass('hidden-js');
@@ -1305,6 +1323,11 @@ fixmystreet.update_councils_text = function(data) {
 fixmystreet.update_pin = function(lonlat, savePushState) {
     var lonlats = fixmystreet.maps.update_pin(lonlat);
 
+    if ($('body').hasClass('noise')) {
+        // Do nothing for noise map page
+        return;
+    }
+
     if (savePushState !== false) {
         if ('pushState' in history) {
             var newReportUrl = '/report/new?longitude=' + lonlats.url.lon + '&latitude=' + lonlats.url.lat;
@@ -1437,11 +1460,13 @@ fixmystreet.fetch_reporting_data = function() {
 })(); // fetch_reporting_data closure
 
 fixmystreet.display = {
-  begin_report: function(lonlat, saveHistoryState) {
+  begin_report: function(lonlat, opts) {
+    opts = opts || {};
+
     lonlat = fixmystreet.maps.begin_report(lonlat);
 
     // Store pin location in form fields, and check coverage of point
-    fixmystreet.update_pin(lonlat, saveHistoryState);
+    fixmystreet.update_pin(lonlat, opts.saveHistoryState);
 
     // It's possible to invoke this multiple times in a row
     // (eg: by clicking on the map multiple times, to
@@ -1453,10 +1478,8 @@ fixmystreet.display = {
     // callback early, skipping the remainder of the setup
     // stuff.
     if (fixmystreet.page == 'new') {
-        if (fixmystreet.map.panTo) {
-            fixmystreet.map.panDuration = 100;
+        if (fixmystreet.map.panTo && !opts.noPan) {
             fixmystreet.map.panTo(lonlat);
-            fixmystreet.map.panDuration = 50;
         }
         return;
     }
@@ -1484,13 +1507,11 @@ fixmystreet.display = {
         fixmystreet.map.updateSize(); // required after changing the size of the map element
     }
     if (fixmystreet.map.panTo) {
-        fixmystreet.map.panDuration = 100;
         fixmystreet.map.panTo(lonlat);
-        fixmystreet.map.panDuration = 50;
     }
 
     $('#sub_map_links').hide();
-    $('.big-hide-pins-link').hide();
+    $('.map-pins-toggle').hide();
     if ($('html').hasClass('mobile')) {
         var $map_box = $('#map_box'),
             width = $map_box.width(),
@@ -1606,7 +1627,7 @@ fixmystreet.display = {
 
             fixmystreet.page = 'report';
 
-            $('.big-hide-pins-link').hide();
+            $('.map-pins-toggle').hide();
 
             // If this is the first individual report we've loaded, remove the
             // "all reports" sub_map_links but store them in a global variable
@@ -1639,6 +1660,7 @@ fixmystreet.display = {
             fixmystreet.set_up.form_section_previews();
             fixmystreet.set_up.fancybox_images();
             fixmystreet.set_up.dropzone($sideReport);
+            fixmystreet.set_up.toggle_visibility();
             $(fixmystreet).trigger('display:report');
 
             fixmystreet.update_report_a_problem_btn();
@@ -1712,7 +1734,7 @@ fixmystreet.display = {
             $('#sub_map_links').replaceWith(fixmystreet.original.sub_map_links);
             delete fixmystreet.original.sub_map_links;
         }
-        $('.big-hide-pins-link').show();
+        $('.map-pins-toggle').show();
         fixmystreet.set_up.map_controls();
 
         fixmystreet.update_report_a_problem_btn();
@@ -1746,6 +1768,18 @@ $(function() {
         setup_func();
     });
 
+    // We only do popstate things on normal map pages, which set this variable
+    if (!fixmystreet.page) {
+        return;
+    }
+    // The replaceState below means that normal browser behaviour with POSTed
+    // pages stops working (because the replaceState turns the POST into a
+    // GET), e.g. clicking back in a multi-page form reloads the page and
+    // takes you back to the start, so avoid that on the noise flow.
+    if ($('body').hasClass('noise')) {
+        return;
+    }
+
     // Have a fake history entry so we can cover all eventualities.
     if ('replaceState' in history) {
         history.replaceState({ initial: true }, null);
@@ -1761,11 +1795,6 @@ $(function() {
                 // Note: no pushState callbacks in these display_* calls,
                 // because we're already inside a popstate: We want to roll
                 // back to a previous state, not create a new one!
-
-                if (!fixmystreet.page) {
-                    // Only care about map pages, which set this variable
-                    return;
-                }
 
                 var location = window.history.location || window.location;
 
@@ -1795,7 +1824,9 @@ $(function() {
                 } else if ('reportId' in e.state) {
                     fixmystreet.display.report(e.state.reportPageUrl, e.state.reportId);
                 } else if ('newReportAtLonlat' in e.state) {
-                    fixmystreet.display.begin_report(e.state.newReportAtLonlat, false);
+                    fixmystreet.display.begin_report(e.state.newReportAtLonlat, {
+                        saveHistoryState: false
+                    });
                 } else if ('page_change' in e.state) {
                     fixmystreet.markers.protocol.use_page = true;
                     $('#show_old_reports').prop('checked', e.state.page_change.show_old_reports);

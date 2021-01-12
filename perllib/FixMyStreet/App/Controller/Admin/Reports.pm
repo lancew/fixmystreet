@@ -4,6 +4,7 @@ use namespace::autoclean;
 
 BEGIN { extends 'Catalyst::Controller'; }
 
+use utf8;
 use List::MoreUtils 'uniq';
 use FixMyStreet::SMS;
 use Utils;
@@ -287,17 +288,6 @@ sub edit : Path('/admin/report_edit') : Args(1) {
         $problem->update({ whensent => \'current_timestamp' })->discard_changes;
         $c->stash->{status_message} = _('That problem has been marked as sent.');
         $c->forward( '/admin/log_edit', [ $id, 'problem', 'marked sent' ] );
-    }
-    elsif ( $c->get_param('flaguser') ) {
-        $c->forward('/admin/users/flag');
-        $c->stash->{problem}->discard_changes;
-    }
-    elsif ( $c->get_param('removeuserflag') ) {
-        $c->forward('/admin/users/flag_remove');
-        $c->stash->{problem}->discard_changes;
-    }
-    elsif ( $c->get_param('banuser') ) {
-        $c->forward('/admin/users/ban');
     }
     elsif ( $c->get_param('submit') ) {
         $c->forward('/auth/check_csrf_token');

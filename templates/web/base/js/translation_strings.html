@@ -62,10 +62,8 @@ fixmystreet.password_minimum_length = [% c.cobrand.password_minimum_length %];
         ok: '[% loc('Continue', "JS") %]',
         map: '[% loc('MAP', "JS") %]',
 
-        map_map: '[% loc('Map', "JS") %]',
-        map_satellite: '[% loc('Satellite', "JS") %]',
-        map_aerial: '[% loc('Aerial', "JS") %]',
-        map_roads: '[% loc('Roads', "JS") %]',
+        map_aerial: '[% loc('Aerial map', "JS") %]',
+        map_roads: '[% loc('Road map', "JS") %]',
 
         expand_map: '[% loc('Expand map', "JS") %]',
         collapse_map: '[% loc('Collapse map', "JS") %]',
@@ -81,7 +79,7 @@ fixmystreet.password_minimum_length = [% c.cobrand.password_minimum_length %];
         upload_cancel_confirmation: '[% loc('Are you sure you want to cancel this upload?', "JS") %]',
         upload_invalid_file_type: '[% loc('Please upload an image only', "JS") %]',
 
-        [% IF c.config.SMS_AUTHENTICATION ~%]
+        [% IF c.cobrand.sms_authentication ~%]
         login_with_email: '[% loc('Log in with email/text', "JS") %]',
         [% ELSE ~%]
         login_with_email: '[% loc('Log in with email', "JS") %]',

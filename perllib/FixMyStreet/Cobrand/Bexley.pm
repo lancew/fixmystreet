@@ -43,6 +43,23 @@ sub category_change_force_resend {
     return ($old =~ /^StreetLighting/ xor $new =~ /^StreetLighting/);
 }
 
+sub munge_report_new_category_list {
+    my ($self, $options, $contacts, $extras) = @_;
+
+    my $c = $self->{c};
+
+    if ( $c->user && $c->user->from_body && $c->user->from_body->id == $self->body->id && $self->feature('staff_url') ) {
+        for my $category ( keys %{ $self->feature('staff_url') } ) {
+            my $urls = $self->feature('staff_url')->{$category};
+            for my $extra ( @{ $extras->{$category} } ) {
+                if ($extra->{code} eq $urls->[0]) {
+                    $extra->{description} =~ s#$urls->[1]#$urls->[2]#s;
+                }
+            }
+        }
+    }
+}
+
 sub on_map_default_status { 'open' }
 
 sub open311_munge_update_params {
@@ -122,6 +139,11 @@ sub open311_extra_data_include {
         }
     }
 
+    # Add private comments field
+    push @$open311_only,
+        { name => 'private_comments', description => 'Private comments',
+          value => $row->get_extra_metadata('private_comments') };
+
     return $open311_only;
 }
 
@@ -194,7 +216,11 @@ sub open311_post_send {
     }
 
     return unless @to;
-    my $sender = FixMyStreet::SendReport::Email->new( to => \@to );
+    my $sender = FixMyStreet::SendReport::Email->new(
+        use_verp => 0,
+        use_replyto => 1,
+        to => \@to,
+    );
 
     $self->open311_config($row, $h, {}, $contact); # Populate NSGRef again if needed
 
@@ -224,6 +250,10 @@ sub update_anonymous_message {
 
     my $staff = $update->user->from_body || $update->get_extra_metadata('is_body_user') || $update->get_extra_metadata('is_superuser');
     return sprintf('Posted anonymously by a non-staff user at %s', $t) if !$staff;
+}
+
+sub report_form_extras {
+    ( { name => 'private_comments' } )
 }
 
 1;

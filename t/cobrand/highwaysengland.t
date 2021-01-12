@@ -32,6 +32,10 @@ $mech->create_contact_ok(email => 'highways@example.com', body_id => $highways->
 FixMyStreet::override_config {
     ALLOWED_COBRANDS => 'highwaysengland',
     MAPIT_URL => 'http://mapit.uk/',
+    CONTACT_EMAIL => 'fixmystreet@example.org',
+    COBRAND_FEATURES => {
+        contact_email => { highwaysengland => 'highwaysengland@example.org' },
+    },
 }, sub {
     subtest "check where heard from saved" => sub {
         $mech->get_ok('/around');
@@ -64,11 +68,68 @@ FixMyStreet::override_config {
 
     };
 
+    my ($problem) = $mech->create_problems_for_body(1, $highways->id, 'Title');
     subtest "check anonymous display" => sub {
-        my ($problem) = $mech->create_problems_for_body(1, $highways->id, 'Title');
         $mech->get_ok('/report/' . $problem->id);
         $mech->content_lacks('Reported by Test User at');
     };
+
+    subtest "contact form is disabled without report ID" => sub {
+        $mech->get('/contact');
+        ok !$mech->res->is_success(), "want a bad response";
+        is $mech->res->code, 404, "got 404";
+    };
+
+    subtest "contact form is enabled for abuse reports" => sub {
+        $mech->get_ok('/contact?id=' . $problem->id);
+        $mech->content_lacks('fixmystreet@example.org', "Doesn't mention global CONTACT_EMAIL");
+        $mech->content_lacks('fixmystreet&#64;example.org', "Doesn't mention (escaped) global CONTACT_EMAIL");
+        $mech->content_contains('highwaysengland&#64;example.org', "Does mention cobrand contact_email") or diag $mech->content;
+    };
+};
+
+subtest 'Dashboard CSV extra columns' => sub {
+    $mech->delete_problems_for_body($highways->id);
+    my ($problem1, $problem2) = $mech->create_problems_for_body(2, $highways->id, 'Title');
+    $problem1->update({
+        extra => {
+            where_hear => "Social media",
+            _fields => [
+                {
+                    name => "area_name",
+                    value => "South West",
+                },
+            ],
+        },
+        service => 'desktop',
+        cobrand => 'highwaysengland'
+    });
+    $problem2->update({
+        extra => {
+            where_hear => "Search engine",
+            _fields => [
+                {
+                    name => "area_name",
+                    value => "Area 7",
+                },
+            ],
+        },
+        service => 'mobile',
+        cobrand => 'fixmystreet',
+    });
+
+    my $staffuser = $mech->create_user_ok('counciluser@example.com', name => 'Council User',
+        from_body => $highways, password => 'password');
+    $mech->log_in_ok( $staffuser->email );
+    FixMyStreet::override_config {
+        MAPIT_URL => 'http://mapit.uk/',
+        ALLOWED_COBRANDS => 'highwaysengland',
+    }, sub {
+        $mech->get_ok('/dashboard?export=1');
+    };
+    $mech->content_contains('URL","Device Type","Reported As","Area name","How you found us","Site Used"');
+    $mech->content_contains('http://highwaysengland.example.org/report/' . $problem1->id .',desktop,,"South West","Social media",highwaysengland');
+    $mech->content_contains('http://highwaysengland.example.org/report/' . $problem2->id .',mobile,,"Area 7","Search engine",fixmystreet');
 };
 
 done_testing();

@@ -97,7 +97,7 @@ Returns the minimum length a password can be set to.
 
 =cut
 
-sub password_minimum_length { 6 }
+sub password_minimum_length { 8 }
 
 =item country
 
@@ -382,6 +382,8 @@ sub shorten_recency_if_new_greater_than_fixed {
     return 1;
 }
 
+sub front_stats_show_middle { 'fixed' }
+
 =item front_stats_data
 
 Return a data structure containing the front stats information that a template
@@ -395,16 +397,23 @@ sub front_stats_data {
     my $recency         = '1 week';
     my $shorter_recency = '3 days';
 
-    my $fixed   = $self->problems->recent_fixed();
+    my ($fixed, $completed);
+    if ($self->front_stats_show_middle eq 'completed') {
+        $completed = $self->problems->recent_completed();
+    } elsif ($self->front_stats_show_middle eq 'fixed') {
+        $fixed = $self->problems->recent_fixed();
+    }
     my $updates = $self->problems->number_comments();
     my $new     = $self->problems->recent_new( $recency );
 
-    if ( $new > $fixed && $self->shorten_recency_if_new_greater_than_fixed ) {
+    my $middle = $fixed // $completed // 0;
+    if ( $new > $middle && $self->shorten_recency_if_new_greater_than_fixed ) {
         $recency = $shorter_recency;
         $new     = $self->problems->recent_new( $recency );
     }
 
     my $stats = {
+        completed => $completed,
         fixed   => $fixed,
         updates => $updates,
         new     => $new,
@@ -714,7 +723,6 @@ sub admin_pages {
         $pages->{reports} = [ _('Reports'), 2 ];
         $pages->{report_edit} = [ undef, undef ];
         $pages->{update_edit} = [ undef, undef ];
-        $pages->{abuse_edit} = [ undef, undef ];
     }
     if ( $user->has_body_permission_to('template_edit') ) {
         $pages->{templates} = [ _('Templates'), 3 ];
@@ -733,6 +741,9 @@ sub admin_pages {
     if ( $self->allow_report_extra_fields && $user->has_body_permission_to('category_edit') ) {
         $pages->{reportextrafields} = [ _('Extra Fields'), 10 ];
         $pages->{reportextrafields_edit} = [ undef, undef ];
+    }
+    if ( $user->has_body_permission_to('emergency_message_edit') ) {
+        $pages->{emergencymessage} = [ _('Emergency message'), 12 ];
     }
 
     return $pages;
@@ -793,6 +804,7 @@ sub available_permissions {
             category_edit => _("Add/edit problem categories"),
             template_edit => _("Add/edit response templates"),
             responsepriority_edit => _("Add/edit response priorities"),
+            emergency_message_edit => _("Add/edit emergency message"),
         },
     };
 }
@@ -1244,6 +1256,7 @@ sub get_geocoder {
     FixMyStreet->config('GEOCODER');
 }
 
+sub sms_authentication { FixMyStreet->config('SMS_AUTHENTICATION') }
 
 sub problem_as_hashref {
     my $self = shift;
@@ -1335,5 +1348,19 @@ The URL of the privacy policy to use on the report and update submissions forms.
 =cut
 
 sub privacy_policy_url { '/privacy' }
+
+=item emergency_message
+
+Emergency message, if one has been set in the admin.
+
+=cut
+
+sub emergency_message {
+    my $self = shift;
+    return unless $self->can('body');
+    my $body = $self->body;
+    return unless $body;
+    FixMyStreet::Template::SafeString->new($body->get_extra_metadata('emergency_message'));
+}
 
 1;

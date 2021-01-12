@@ -40,11 +40,21 @@ $mech->create_contact_ok(body_id => $body->id, category => 'Gulley covers', emai
 $mech->create_contact_ok(body_id => $body->id, category => 'Damaged road', email => "ROAD");
 $mech->create_contact_ok(body_id => $body->id, category => 'Flooding in the road', email => "ConfirmFLOD");
 $mech->create_contact_ok(body_id => $body->id, category => 'Flytipping', email => "UniformFLY");
-$mech->create_contact_ok(body_id => $body->id, category => 'Dead animal', email => "ANIM");
+my $da = $mech->create_contact_ok(body_id => $body->id, category => 'Dead animal', email => "ANIM");
 $mech->create_contact_ok(body_id => $body->id, category => 'Street cleaning and litter', email => "STREET");
 my $category = $mech->create_contact_ok(body_id => $body->id, category => 'Something dangerous', email => "DANG");
 $category->set_extra_metadata(group => 'Danger things');
 $category->update;
+
+$da->set_extra_fields({
+    code => 'message',
+    datatype => 'text',
+    description => 'Please visit http://public.example.org/dead_animals',
+    order => 100,
+    required => 'false',
+    variable => 'false',
+});
+$da->update;
 
 FixMyStreet::override_config {
     ALLOWED_COBRANDS => [ 'bexley' ],
@@ -58,6 +68,10 @@ FixMyStreet::override_config {
             outofhours => 'outofhours@bexley,ooh2@bexley',
             flooding => 'flooding@bexley',
             eh => 'eh@bexley',
+        } },
+        staff_url => { bexley => {
+            'Dead animal' => [ 'message', 'http://public.example.org/dead_animals', 'http://staff.example.org/dead_animals' ],
+            'Missing category' => [ 'message', 'http://public.example.org/dead_animals', 'http://staff.example.org/dead_animals' ]
         } },
         category_groups => { bexley => 1 },
     },
@@ -129,6 +143,7 @@ FixMyStreet::override_config {
             if (my $t = $test->{email}) {
                 my $email = $mech->get_email;
                 $t = join('@[^@]*', @$t);
+                is $email->header('From'), '"Test User" <do-not-reply@example.org>';
                 like $email->header('To'), qr/^[^@]*$t@[^@]*$/;
                 if ($test->{code} =~ /Confirm/) {
                     like $mech->get_text_body_from_email($email), qr/Site code: Road ID/;
@@ -212,6 +227,25 @@ FixMyStreet::override_config {
         $mech->content_contains('Posted anonymously by a non-staff user');
     };
 
+    subtest 'dead animal url changed for staff users' => sub {
+        $mech->get_ok('/report/new/ajax?latitude=51.466707&longitude=0.181108');
+        $mech->content_lacks('http://public.example.org/dead_animals');
+        $mech->content_contains('http://staff.example.org/dead_animals');
+        $mech->log_out_ok;
+        $mech->get_ok('/report/new/ajax?latitude=51.466707&longitude=0.181108');
+        $mech->content_contains('http://public.example.org/dead_animals');
+        $mech->content_lacks('http://staff.example.org/dead_animals');
+    };
+
+    subtest 'private comments field' => sub {
+        my $user = $mech->log_in_ok('cs@example.org');
+        $user->update({ from_body => $body, is_superuser => 1, name => 'Staff User' });
+        for my $permission ( 'contribute_as_another_user', 'contribute_as_anonymous_user', 'contribute_as_body' ) {
+            $user->user_body_permissions->create({ body => $body, permission_type => $permission });
+        }
+        $mech->get_ok('/report/new?longitude=0.15356&latitude=51.45556');
+        $mech->content_contains('name="private_comments"');
+    };
 };
 
 subtest 'nearest road returns correct road' => sub {

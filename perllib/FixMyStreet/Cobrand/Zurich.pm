@@ -247,6 +247,12 @@ my @public_holidays = (
     '2021-01-01', '2021-04-02', '2021-04-05',
     '2021-04-19', '2021-05-13', '2021-05-24',
     '2021-09-13',
+    '2021-05-12', '2021-05-14', '2021-12-27', '2021-12-28', '2021-12-29', '2021-12-30', '2021-12-31',
+
+    '2022-04-15', '2022-04-18',
+    '2022-04-25', '2022-05-26', '2022-06-06',
+    '2022-08-01', '2022-09-12', '2022-12-26',
+    '2022-05-27', '2022-12-27', '2022-12-28', '2022-12-29', '2022-12-30',
 );
 
 sub overdue {
@@ -1057,9 +1063,14 @@ Send an email to the B<user> who logged the problem, if their email address is c
 
 sub _admin_send_email {
     my ( $c, $template, $problem ) = @_;
-
-    return unless $problem->get_extra_metadata('email_confirmed');
     return if $problem->non_public;
+
+    unless ( $problem->get_extra_metadata('email_confirmed') ) {
+        # Make a note of what email was going to be sent, so it can be sent
+        # when the report is confirmed.
+        $problem->set_extra_metadata(admin_send_email_template => $template);
+        return;
+    }
 
     my $to = $problem->name
         ? [ $problem->user->email, $problem->name ]

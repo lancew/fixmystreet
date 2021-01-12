@@ -159,7 +159,7 @@ foreach my $test (
                     username_register => 'test-1@example.com',
                     phone         => '07903 123 456',
                     category      => 'Street lighting',
-                    password_register => $test->{password} ? 'secret' : '',
+                    password_register => $test->{password} ? 'secretsecret' : '',
                 }
             },
             "submit good details"
@@ -208,7 +208,7 @@ foreach my $test (
 
     is $report->name, 'Joe Bloggs', 'name updated correctly';
     if ($test->{password}) {
-        ok $report->user->check_password('secret'), 'password updated correctly';
+        ok $report->user->check_password('secretsecret'), 'password updated correctly';
     } elsif ($test->{user}) {
         ok $report->user->check_password('old_password'), 'password unchanged, as no new one given';
     } else {
@@ -646,6 +646,19 @@ subtest "category groups" => sub {
         $mech->get_ok("/report/new?lat=$saved_lat&lon=$saved_lon");
         $mech->content_like(qr{<optgroup label="Pavements">\s*<option value='Potholes'>Potholes</option>\s*<option value='Street lighting'>Street lighting</option></optgroup>});
         $mech->content_like(qr{<optgroup label="Roads">\s*<option value='Potholes'>Potholes</option>\s*<option value='Street lighting'>Street lighting</option></optgroup>});
+    };
+};
+
+subtest "category hints" => sub {
+    FixMyStreet::override_config {
+        ALLOWED_COBRANDS => 'fixmystreet',
+        MAPIT_URL => 'http://mapit.uk/',
+    }, sub {
+        $contact2->update( { extra => { title_hint => 'Example summary', detail_hint => 'Example detail' } } );
+        $mech->get_ok("/report/new?lat=$saved_lat&lon=$saved_lon");
+        $mech->submit_form_ok( { with_fields => { category => 'Potholes' } } );
+        $mech->content_contains('Example summary');
+        $mech->content_contains('Example detail');
     };
 };
 
