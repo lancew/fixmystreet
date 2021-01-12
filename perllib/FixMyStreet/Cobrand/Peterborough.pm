@@ -10,6 +10,7 @@ use Utils;
 use Moo;
 with 'FixMyStreet::Roles::ConfirmOpen311';
 with 'FixMyStreet::Roles::ConfirmValidation';
+with 'FixMyStreet::Roles::Waste';
 
 sub council_area_id { 2566 }
 sub council_area { 'Peterborough' }
@@ -170,6 +171,57 @@ sub bin_addresses_for_postcode {
     } } @$premises ];
     natkeysort_inplace { $_->{label} } @$data;
     return $data;
+}
+
+sub look_up_property {
+    my $self = shift;
+    my $id = shift;
+
+    my ($pc, $uprn) = split ":", $id;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+    # XXX this is a repeat of the call we already made in bin_addresses_for_postcode - need to cache result somehow (session?)
+    my $premises = $bartec->Premises_Get($pc);
+
+    my %premises = map { $_->{UPRN} => $_ } @$premises;
+
+    my $property = $premises{$uprn};
+
+    return {
+        id => $property->{UPRN},
+        uprn => $property->{UPRN},
+        address => $self->_format_address($property),
+        latitude => $property->{Location}->{Metric}->{Latitude},
+        longitude => $property->{Location}->{Metric}->{Longitude},
+    };
+}
+
+sub bin_services_for_address {
+    my $self = shift;
+    my $property = shift;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+    my $results = $bartec->Jobs_FeatureScheduleDates_Get($property->{uprn});
+
+    my @out;
+
+    my $jobs = $results->{Jobs_FeatureScheduleDates};
+
+    foreach (@$jobs) {
+        my $last = construct_bin_date($_->{PreviousDate});
+        my $next = construct_bin_date($_->{NextDate});
+        my $row = {
+            id => $_->{JobID},
+            last => { date => $last, ordinal => ordinal($last->day) },
+            next => { date => $next, ordinal => ordinal($next->day) },
+            service_name => $_->{JobDescription},
+        };
+        push @out, $row;
+    }
+
+    return \@out;
 }
 
 sub _format_address {
