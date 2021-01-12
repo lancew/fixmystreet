@@ -171,22 +171,45 @@ sub Premises_Get {
     return \@premises;
 }
 
+sub Jobs_FeatureScheduleDates_Get {
+    my $self = shift;
+    my $uprn = shift;
+
+    my $res = $self->call('Jobs_FeatureScheduleDates_Get', token => $self->token, UPRN => $uprn, DateRange => {
+        MinimumDate => {
+            attr => { xmlns => "http://www.bartec-systems.com" },
+            value => "2021-01-01T00:00:00",
+        },
+        MaximumDate => {
+            attr => { xmlns => "http://www.bartec-systems.com" },
+            value => "2021-01-31T00:00:00",
+        },
+    });
+    delete $res->{SOM};
+    return $res;
+}
+
 sub make_soap_structure {
     my @out;
     for (my $i=0; $i<@_; $i+=2) {
-        my $name = $_[$i] =~ /:/ ? $_[$i] : $_[$i];
+        my $name = $_[$i];
         my $v = $_[$i+1];
-        my $val = $v;
-        my $d = SOAP::Data->name($name);
         if (ref $v eq 'HASH') {
-            $val = \SOAP::Data->value(make_soap_structure(%$v));
+            my $attr = delete $v->{attr};
+            my $value = delete $v->{value};
+
+            my $d = SOAP::Data->name($name => $value ? $value : \SOAP::Data->value(make_soap_structure(%$v)));
+
+            $d->attr( $attr ) if $attr;
+            push @out, $d;
         } elsif (ref $v eq 'ARRAY') {
-            my @map = map { make_soap_structure(%$_) } @$v;
-            $val = \SOAP::Data->value(SOAP::Data->name('dummy' => @map));
+            push @out, map { SOAP::Data->name($name => \SOAP::Data->value(make_soap_structure(%$_))) } @$v;
+        } else {
+            push @out, SOAP::Data->name($name => $v);
         }
-        push @out, $d->value($val);
     }
     return @out;
 }
+
 
 1;
