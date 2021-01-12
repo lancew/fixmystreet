@@ -18,6 +18,9 @@ use FixMyStreet::WorkingDays;
 use Open311::GetServiceRequestUpdates;
 use Memcached;
 
+use Moo;
+with 'FixMyStreet::Roles::Waste';
+
 sub council_area_id { return 2482; }
 sub council_area { return 'Bromley'; }
 sub council_name { return 'Bromley Council'; }
@@ -468,22 +471,6 @@ sub look_up_property {
     };
 }
 
-my %irregulars = ( 1 => 'st', 2 => 'nd', 3 => 'rd', 11 => 'th', 12 => 'th', 13 => 'th');
-sub ordinal {
-    my $n = shift;
-    $irregulars{$n % 100} || $irregulars{$n % 10} || 'th';
-}
-
-sub construct_bin_date {
-    my $str = shift;
-    return unless $str;
-    my $offset = ($str->{OffsetMinutes} || 0) * 60;
-    my $zone = DateTime::TimeZone->offset_as_string($offset);
-    my $date = DateTime::Format::W3CDTF->parse_datetime($str->{DateTime});
-    $date->set_time_zone($zone);
-    return $date;
-}
-
 sub image_for_service {
     my ($self, $service_id) = @_;
     my $base = '/cobrands/bromley/images/container-images';
@@ -610,7 +597,7 @@ sub bin_services_for_address {
         my $now = DateTime->now->set_time_zone(FixMyStreet->local_time_zone);
         foreach (@$tasks) {
             my $ref = join(',', @{$_->{Ref}{Value}{anyType}});
-            my $completed = construct_bin_date($_->{CompletedDate});
+            my $completed = construct_bin_date($_->{CompletedDate}{DateTime}, $_->{CompletedDate}{OffsetMinutes});
             my $state = $_->{State}{Name} || '';
             my $task_type_id = $_->{TaskTypeId} || '';
 
@@ -704,11 +691,11 @@ sub _parse_schedules {
     my $today = DateTime->now->set_time_zone(FixMyStreet->local_time_zone)->strftime("%F");
     my ($min_next, $max_last, $next_changed);
     foreach my $schedule (@$schedules) {
-        my $end_date = construct_bin_date($schedule->{EndDate})->strftime("%F");
+        my $end_date = construct_bin_date($schedule->{EndDate}{DateTime}, $schedule->{EndDate}{OffsetMinutes})->strftime("%F");
         next if $end_date lt $today;
 
         my $next = $schedule->{NextInstance};
-        my $d = construct_bin_date($next->{CurrentScheduledDate});
+        my $d = construct_bin_date($next->{CurrentScheduledDate}{DateTime}, $next->{CurrentScheduledDate}{OffsetMinutes});
         if ($d && (!$min_next || $d < $min_next->{date})) {
             $next_changed = $next->{CurrentScheduledDate}{DateTime} ne $next->{OriginalScheduledDate}{DateTime};
             $min_next = {
@@ -719,7 +706,7 @@ sub _parse_schedules {
         }
 
         my $last = $schedule->{LastInstance};
-        $d = construct_bin_date($last->{CurrentScheduledDate});
+        $d = construct_bin_date($last->{CurrentScheduledDate}{DateTime}, $last->{CurrentScheduledDate}{OffsetMinutes});
         # It is possible the last instance for this schedule has been rescheduled to
         # be in the future. If so, we should treat it like it is a next instance.
         if ($d && $d->strftime("%F") gt $today && (!$min_next || $d < $min_next->{date})) {
@@ -766,7 +753,7 @@ sub bin_future_collections {
         my $task_id = $_->{ServiceTaskRef}{Value}{anyType};
         my $tasks = Integrations::Echo::force_arrayref($_->{Instances}, 'ScheduledTaskInfo');
         foreach (@$tasks) {
-            my $dt = construct_bin_date($_->{CurrentScheduledDate});
+            my $dt = construct_bin_date($_->{CurrentScheduledDate}{DateTime}, $_->{CurrentScheduledDate}{OffsetMinutes});
             my $summary = $names{$task_id} . ' collection';
             my $desc = '';
             push @$events, { date => $dt, summary => $summary, desc => $desc };
@@ -856,7 +843,7 @@ sub waste_fetch_events {
         next unless $self->waste_check_last_update(
             $cfg, $report, $request->{status}, $request->{external_status_code});
 
-        my $last_updated = construct_bin_date($event->{LastUpdatedDate});
+        my $last_updated = construct_bin_date($event->{LastUpdatedDate}{DateTime}, $event->{LastUpdatedDate}{OffsetMinutes});
         $request->{comment_time} = $last_updated;
 
         print "  Updating report to state $request->{status}, $request->{description} ($request->{external_status_code})\n" if $cfg->{verbose};
