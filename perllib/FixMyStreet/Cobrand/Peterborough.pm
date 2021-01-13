@@ -3,10 +3,14 @@ use parent 'FixMyStreet::Cobrand::Whitelabel';
 
 use strict;
 use warnings;
+use Integrations::Bartec;
+use Sort::Key::Natural qw(natkeysort_inplace);
+use Utils;
 
 use Moo;
 with 'FixMyStreet::Roles::ConfirmOpen311';
 with 'FixMyStreet::Roles::ConfirmValidation';
+with 'FixMyStreet::Roles::Waste';
 
 sub council_area_id { 2566 }
 sub council_area { 'Peterborough' }
@@ -118,6 +122,113 @@ sub dashboard_export_problems_add_columns {
             nearest_address => $address,
         };
     });
+}
+
+
+=head2 Waste product code
+
+Functions specific to the waste product & Bartec integration.
+
+=cut 
+
+=head2 munge_around_category_where, munge_reports_category_list, munge_report_new_contacts
+
+These filter out waste-related categories from the main FMS report flow.
+TODO: Are these small enough to be here or should they be in a Role?
+
+=cut 
+
+sub munge_around_category_where {
+    my ($self, $where) = @_;
+    $where->{extra} = [ undef, { -not_like => '%T10:waste_only,I1:1%' } ];
+}
+
+sub munge_reports_category_list {
+    my ($self, $categories) = @_;
+    @$categories = grep { !$_->get_extra_metadata('waste_only') } @$categories;
+}
+
+sub munge_report_new_contacts {
+    my ($self, $categories) = @_;
+
+    return if $self->{c}->action =~ /^waste/;
+
+    @$categories = grep { !$_->get_extra_metadata('waste_only') } @$categories;
+    $self->SUPER::munge_report_new_contacts($categories);
+}
+
+
+sub bin_addresses_for_postcode {
+    my $self = shift;
+    my $pc = shift;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+    my $premises = $bartec->Premises_Get($pc);
+    my $data = [ map { {
+        value => $pc . ":" . $_->{UPRN},
+        label => $self->_format_address($_),
+    } } @$premises ];
+    natkeysort_inplace { $_->{label} } @$data;
+    return $data;
+}
+
+sub look_up_property {
+    my $self = shift;
+    my $id = shift;
+
+    my ($pc, $uprn) = split ":", $id;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+    # XXX this is a repeat of the call we already made in bin_addresses_for_postcode - need to cache result somehow (session?)
+    my $premises = $bartec->Premises_Get($pc);
+
+    my %premises = map { $_->{UPRN} => $_ } @$premises;
+
+    my $property = $premises{$uprn};
+
+    return {
+        id => $property->{UPRN},
+        uprn => $property->{UPRN},
+        address => $self->_format_address($property),
+        latitude => $property->{Location}->{Metric}->{Latitude},
+        longitude => $property->{Location}->{Metric}->{Longitude},
+    };
+}
+
+sub bin_services_for_address {
+    my $self = shift;
+    my $property = shift;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+    my $results = $bartec->Jobs_FeatureScheduleDates_Get($property->{uprn});
+
+    my @out;
+
+    my $jobs = $results->{Jobs_FeatureScheduleDates};
+
+    foreach (@$jobs) {
+        my $last = construct_bin_date($_->{PreviousDate});
+        my $next = construct_bin_date($_->{NextDate});
+        my $row = {
+            id => $_->{JobID},
+            last => { date => $last, ordinal => ordinal($last->day) },
+            next => { date => $next, ordinal => ordinal($next->day) },
+            service_name => $_->{JobDescription},
+        };
+        push @out, $row;
+    }
+
+    return \@out;
+}
+
+sub _format_address {
+    my ($self, $property) = @_;
+
+    my $a = $property->{Address};
+    return Utils::trim_text(FixMyStreet::Template::title(join(" ", $a->{Address1}, $a->{Address2}, $a->{Street}, $a->{Town})));
 }
 
 1;
