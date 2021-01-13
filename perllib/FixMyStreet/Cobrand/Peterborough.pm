@@ -157,17 +157,39 @@ sub munge_report_new_contacts {
     $self->SUPER::munge_report_new_contacts($categories);
 }
 
+sub _premises_for_postcode {
+    my $self = shift;
+    my $pc = shift;
+
+    my $key = "peterborough:bartec:premises_for_postcode:$pc";
+
+    unless ( $self->{c}->session->{$key} ) {
+        my $bartec = $self->feature('bartec');
+        $bartec = Integrations::Bartec->new(%$bartec);
+        my $response = $bartec->Premises_Get($pc);
+
+        $self->{c}->session->{$key} = [ map { {
+            id => $_->{UPRN},
+            uprn => $_->{UPRN},
+            address => $self->_format_address($_),
+            latitude => $_->{Location}->{Metric}->{Latitude},
+            longitude => $_->{Location}->{Metric}->{Longitude},
+        } } @$response ];
+        # XXX Need to remove this from session at end of interaction
+    }
+
+    return $self->{c}->session->{$key};
+}
+
 
 sub bin_addresses_for_postcode {
     my $self = shift;
     my $pc = shift;
 
-    my $bartec = $self->feature('bartec');
-    $bartec = Integrations::Bartec->new(%$bartec);
-    my $premises = $bartec->Premises_Get($pc);
+    my $premises = $self->_premises_for_postcode($pc);
     my $data = [ map { {
-        value => $pc . ":" . $_->{UPRN},
-        label => $self->_format_address($_),
+        value => $pc . ":" . $_->{uprn},
+        label => $_->{address},
     } } @$premises ];
     natkeysort_inplace { $_->{label} } @$data;
     return $data;
@@ -179,22 +201,11 @@ sub look_up_property {
 
     my ($pc, $uprn) = split ":", $id;
 
-    my $bartec = $self->feature('bartec');
-    $bartec = Integrations::Bartec->new(%$bartec);
-    # XXX this is a repeat of the call we already made in bin_addresses_for_postcode - need to cache result somehow (session?)
-    my $premises = $bartec->Premises_Get($pc);
+    my $premises = $self->_premises_for_postcode($pc);
 
-    my %premises = map { $_->{UPRN} => $_ } @$premises;
+    my %premises = map { $_->{uprn} => $_ } @$premises;
 
-    my $property = $premises{$uprn};
-
-    return {
-        id => $property->{UPRN},
-        uprn => $property->{UPRN},
-        address => $self->_format_address($property),
-        latitude => $property->{Location}->{Metric}->{Latitude},
-        longitude => $property->{Location}->{Metric}->{Longitude},
-    };
+    return $premises{$uprn};
 }
 
 sub bin_services_for_address {
