@@ -228,7 +228,8 @@ sub _format_address {
     my ($self, $property) = @_;
 
     my $a = $property->{Address};
-    return Utils::trim_text(FixMyStreet::Template::title(join(" ", $a->{Address1}, $a->{Address2}, $a->{Street}, $a->{Town})));
+    my $prefix = join(" ", $a->{Address1}, $a->{Address2}, $a->{Street});
+    return Utils::trim_text(FixMyStreet::Template::title(join(", ", $prefix, $a->{Town}, $a->{PostCode})));
 }
 
 1;
