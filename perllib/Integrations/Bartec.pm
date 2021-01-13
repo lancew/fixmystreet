@@ -46,7 +46,7 @@ has token => (
         unless ($token) {
             my $result = $self->Authenticate;
             $token = $result->{Token}->{TokenString};
-            Memcached::set($key, $token, 300);
+            Memcached::set($key, $token, 60*30);
         }
         return $token;
     },
