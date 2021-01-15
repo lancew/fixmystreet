@@ -157,17 +157,39 @@ sub munge_report_new_contacts {
     $self->SUPER::munge_report_new_contacts($categories);
 }
 
+sub _premises_for_postcode {
+    my $self = shift;
+    my $pc = shift;
+
+    my $key = "peterborough:bartec:premises_for_postcode:$pc";
+
+    unless ( $self->{c}->session->{$key} ) {
+        my $bartec = $self->feature('bartec');
+        $bartec = Integrations::Bartec->new(%$bartec);
+        my $response = $bartec->Premises_Get($pc);
+
+        $self->{c}->session->{$key} = [ map { {
+            id => $_->{UPRN},
+            uprn => $_->{UPRN},
+            address => $self->_format_address($_),
+            latitude => $_->{Location}->{Metric}->{Latitude},
+            longitude => $_->{Location}->{Metric}->{Longitude},
+        } } @$response ];
+        # XXX Need to remove this from session at end of interaction
+    }
+
+    return $self->{c}->session->{$key};
+}
+
 
 sub bin_addresses_for_postcode {
     my $self = shift;
     my $pc = shift;
 
-    my $bartec = $self->feature('bartec');
-    $bartec = Integrations::Bartec->new(%$bartec);
-    my $premises = $bartec->Premises_Get($pc);
+    my $premises = $self->_premises_for_postcode($pc);
     my $data = [ map { {
-        value => $pc . ":" . $_->{UPRN},
-        label => $self->_format_address($_),
+        value => $pc . ":" . $_->{uprn},
+        label => $_->{address},
     } } @$premises ];
     natkeysort_inplace { $_->{label} } @$data;
     return $data;
@@ -179,22 +201,11 @@ sub look_up_property {
 
     my ($pc, $uprn) = split ":", $id;
 
-    my $bartec = $self->feature('bartec');
-    $bartec = Integrations::Bartec->new(%$bartec);
-    # XXX this is a repeat of the call we already made in bin_addresses_for_postcode - need to cache result somehow (session?)
-    my $premises = $bartec->Premises_Get($pc);
+    my $premises = $self->_premises_for_postcode($pc);
 
-    my %premises = map { $_->{UPRN} => $_ } @$premises;
+    my %premises = map { $_->{uprn} => $_ } @$premises;
 
-    my $property = $premises{$uprn};
-
-    return {
-        id => $property->{UPRN},
-        uprn => $property->{UPRN},
-        address => $self->_format_address($property),
-        latitude => $property->{Location}->{Metric}->{Latitude},
-        longitude => $property->{Location}->{Metric}->{Longitude},
-    };
+    return $premises{$uprn};
 }
 
 sub bin_services_for_address {
@@ -203,11 +214,13 @@ sub bin_services_for_address {
 
     my $bartec = $self->feature('bartec');
     $bartec = Integrations::Bartec->new(%$bartec);
-    my $results = $bartec->Jobs_FeatureScheduleDates_Get($property->{uprn});
+
+    # TODO parallelize these calls
+    my $jobs = $bartec->Jobs_FeatureScheduleDates_Get($property->{uprn});
+    my $schedules = $bartec->Features_Schedules_Get($property->{uprn});
+    my %schedules = map { $_->{JobName} => $_ } @$schedules;
 
     my @out;
-
-    my $jobs = $results->{Jobs_FeatureScheduleDates};
 
     foreach (@$jobs) {
         my $last = construct_bin_date($_->{PreviousDate});
@@ -217,6 +230,7 @@ sub bin_services_for_address {
             last => { date => $last, ordinal => ordinal($last->day) },
             next => { date => $next, ordinal => ordinal($next->day) },
             service_name => $_->{JobDescription},
+            schedule => $schedules{$_->{JobName}}->{Frequency},
         };
         push @out, $row;
     }
@@ -228,7 +242,10 @@ sub _format_address {
     my ($self, $property) = @_;
 
     my $a = $property->{Address};
-    return Utils::trim_text(FixMyStreet::Template::title(join(" ", $a->{Address1}, $a->{Address2}, $a->{Street}, $a->{Town})));
+    my $prefix = join(" ", $a->{Address1}, $a->{Address2}, $a->{Street});
+    return Utils::trim_text(FixMyStreet::Template::title(join(", ", $prefix, $a->{Town}, $a->{PostCode})));
 }
+
+sub bin_day_format { '%A, %-d~~~ %B %Y' }
 
 1;

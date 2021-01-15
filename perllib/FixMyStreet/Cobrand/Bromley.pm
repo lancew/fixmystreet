@@ -733,6 +733,8 @@ sub _parse_schedules {
     };
 }
 
+sub bin_day_format { '%A, %-d~~~ %B' }
+
 sub bin_future_collections {
     my $self = shift;
 

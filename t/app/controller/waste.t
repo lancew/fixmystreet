@@ -196,7 +196,7 @@ FixMyStreet::override_config {
         set_fixed_time('2020-05-28T17:00:00Z'); # After sample data collection
         $mech->get_ok('/waste');
         $mech->submit_form_ok({ with_fields => { postcode => 'PE1 3NA' } });
-        $mech->content_contains('1 Pope Way Peterborough');
+        $mech->content_contains('1 Pope Way, Peterborough, PE1 3NA');
         # $mech->submit_form_ok({ with_fields => { address => 'PE1 3NA:100090215480' } });
         # $mech->content_contains('1 Pope Way Peterborough');
     };
