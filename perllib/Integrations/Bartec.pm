@@ -172,8 +172,7 @@ sub Premises_Get {
 }
 
 sub Jobs_FeatureScheduleDates_Get {
-    my $self = shift;
-    my $uprn = shift;
+    my ($self, $uprn, $start, $end) = @_;
 
     my $res = $self->call('Jobs_FeatureScheduleDates_Get', token => $self->token, UPRN => $uprn, DateRange => {
         MinimumDate => {
@@ -185,8 +184,16 @@ sub Jobs_FeatureScheduleDates_Get {
             value => "2021-01-31T00:00:00",
         },
     });
-    delete $res->{SOM};
-    return $res;
+    # XXX proper error handling required
+    return $res->{Jobs_FeatureScheduleDates} || [];
+}
+
+sub Features_Schedules_Get {
+    my $self = shift;
+    my $uprn = shift;
+
+    # This SOAP call fails if the <Types> element is missing, so the [undef] forces an empty <Types /> element
+    return $self->call('Features_Schedules_Get', token => $self->token, UPRN => $uprn, Types => [undef])->{FeatureSchedule} || [];
 }
 
 sub make_soap_structure {
