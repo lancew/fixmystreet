@@ -144,7 +144,8 @@ input.form-error, textarea.form-error {
 
 a#geolocate_link {
     font-family: $heading-font;
-    font-size: 1.125em;
+    font-size: 1em;
+    border-radius: 10em;
 }
 
 .item-list__heading {

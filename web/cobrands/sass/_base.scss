@@ -27,6 +27,10 @@ $header-top-border: $header-top-border-width solid $primary !default;
 
 $container-max-width: 60em !default;
 
+/* COLOURS */
+$geolocation-link: #222;
+$geolocation-link-border: $geolocation-link;
+
 @import "_mixins";
 @import "_report_list";
 
@@ -2429,8 +2433,17 @@ label .muted {
 }
 
 a#geolocate_link {
-  display: inline-block;
-  padding: 0.5em;
+  border: 1px solid $geolocation-link-border;
+  color: $geolocation-link;
+  @include button-size($button-margin-top: 15px);
+  svg {
+    display: inline-block;
+    vertical-align: text-bottom;
+    margin-right: .2em;
+    path {
+      fill: currentColor;
+    }
+  }
 }
 
 .no-js #geolocate_link {

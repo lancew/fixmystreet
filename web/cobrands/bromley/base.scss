@@ -60,6 +60,12 @@ body.frontpage.fullwidthpage {
   color: mix($primary, $primary_text, 30%);
 }
 
+a#geolocate_link {
+  // standard Bromley link font-size was causing geolocation button 
+  // to appear misaligned to icon
+  font-size: 1.1em;
+}
+
 .bromley-header {
   // These are from Bromley's styles, applied here because it's the closest
   // analog to their site header.
