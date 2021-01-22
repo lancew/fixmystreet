@@ -61,6 +61,31 @@ sub geocoder_munge_results {
     $result->{display_name} =~ s/, London Borough of Hackney//;
 }
 
+sub address_for_uprn {
+    my ($self, $uprn) = @_;
+
+    my $api = $self->feature('address_api');
+    my $url = $api->{url};
+    my $key = $api->{key};
+
+    $url .= '?uprn=' . uri_escape_utf8($uprn);
+    my $ua = LWP::UserAgent->new;
+    $ua->default_header(Authorization => $key);
+    my $res = $ua->get($url);
+    my $data = decode_json($res->decoded_content);
+    my $address = $data->{data}->{address}->[0];
+    return "" unless $address;
+
+    my $string = join(", ",
+        grep { $_ && $_ ne 'Hackney' }
+        map { s/((^\w)|(\s\w))/\U$1/g; $_ }
+        map { lc $address->{"line$_"} }
+        (1..3)
+    );
+    $string .= ", $address->{postcode}";
+    return $string;
+}
+
 sub addresses_for_postcode {
     my ($self, $postcode) = @_;
 
@@ -213,16 +238,23 @@ sub get_body_sender {
 }
 
 # Translate email address to actual delivery address
+sub noise_destination_email {
+    my ($self, $row, $name) = @_;
+    my $emails = $self->feature('open311_email');
+    my $where = $row->get_extra_metadata('where');
+    if (my $recipient = $emails->{"noise_$where"}) {
+        my @emails = split(/,/, $recipient);
+        return [ map { [ $_, $name ] } @emails ];
+    }
+}
+
 sub munge_sendreport_params {
     my ($self, $row, $h, $params) = @_;
 
     if ($row->cobrand_data eq 'noise') {
         my $name = $params->{To}[0][1];
-        my $emails = $self->feature('open311_email');
-        my $where = $row->get_extra_metadata('where');
-        if (my $recipient = $emails->{"noise_$where"}) {
-            my @emails = split(/,/, $recipient);
-            $params->{To} = [ map { [ $_, $name ] } @emails ];
+        if (my $recipient = $self->noise_destination_email($row, $name)) {
+            $params->{To} = $recipient;
         }
         return;
     }

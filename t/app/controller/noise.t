@@ -47,7 +47,7 @@ FixMyStreet::override_config {
         $mech->submit_form_ok({ button => 'start' });
         $mech->submit_form_ok({ with_fields => { existing => 0 } });
         $mech->submit_form_ok({ with_fields => { name => "Test McTest", email => $user->email, phone => '01234 567890' } });
-        $mech->submit_form_ok({ with_fields => { best_time => [['day', 'evening'], 1], best_method => 'email' } });
+        $mech->submit_form_ok({ with_fields => { best_time => [['weekday', 'evening'], 1], best_method => 'email' } });
         $mech->submit_form_ok({ with_fields => { postcode => 'B24QA' } });
         $mech->content_contains('Sorry, we did not find any results');
         $mech->submit_form_ok({ with_fields => { postcode => 'L11JD' } });
@@ -71,7 +71,7 @@ FixMyStreet::override_config {
         $mech->submit_form_ok({ with_fields => { more_details => 'Details' } });
         $mech->content_contains('What days does the noise');
         $mech->content_lacks('When has the noise occurred');
-        $mech->content_contains('monday');
+        $mech->content_contains('Monday');
         $mech->submit_form_ok({ with_fields => { process => 'summary' } });
         $mech->content_contains('Thank you for reporting this issue');
         FixMyStreet::Script::Reports::send();
@@ -83,16 +83,16 @@ FixMyStreet::override_config {
         is $user->alerts->count, 1;
         my $report = $user->problems->first;
         is $report->title, "Noise report";
-        is $report->detail, "Kind of noise: music\nNoise details: Details\n\nWhere is the noise coming from? residence\nNoise source: 100000333\n\nIs the noise happening now? Yes\nDoes the time of the noise follow a pattern? Yes\nWhat days does the noise happen? monday, thursday\nWhat time does the noise happen? morning, evening\n";
+        is $report->detail, "Reporter address: 12 Saint Street, Dalston, SW1A 1AA (100000111)\nReporter availability: Weekday or evening, by email\n\nKind of noise: Music\nNoise details: Details\n\nWhere is the noise coming from? A house, flat, park or street\nNoise source: 24 High Street, SW1A 1AA (100000333)\n\nIs the noise happening now? Yes\nDoes the time of the noise follow a pattern? Yes\nWhat days does the noise happen? Monday, Thursday\nWhat time does the noise happen? Morning, Evening\n";
         is $report->latitude, 53;
+        $mech->clear_emails_ok;
     };
     subtest 'Report new noise, no pattern to times' => sub {
-        $mech->clear_emails_ok;
         $mech->get_ok('/noise');
         $mech->submit_form_ok({ button => 'start' });
         $mech->submit_form_ok({ with_fields => { existing => 0 } });
         $mech->submit_form_ok({ with_fields => { name => "Test McTest", email => $user->email, phone => '01234 567890' } });
-        $mech->submit_form_ok({ with_fields => { best_time => [['day', 'evening'], 1], best_method => 'email' } });
+        $mech->submit_form_ok({ with_fields => { best_time => [['weekday', 'evening'], 1], best_method => 'email' } });
         $mech->submit_form_ok({ with_fields => { postcode => 'SW1A 1AA' } });
         $mech->content_contains('12 Saint Street, Dalston');
         $mech->content_lacks('1 Road Road');
@@ -124,15 +124,16 @@ FixMyStreet::override_config {
         my @reports = $user->problems->search(undef, { order_by => 'id' })->all;
         my $report = $reports[-1];
         is $report->title, "Noise report";
-        is $report->detail, "Kind of noise: road\nNoise details: Details\n\nWhere is the noise coming from? residence\nNoise source: 100000333\n\nIs the noise happening now? No\nDoes the time of the noise follow a pattern? No\nWhen has the noise occurred? late at night\n";
+        is $report->detail, "Reporter address: 12 Saint Street, Dalston, SW1A 1AA (100000111)\nReporter availability: Weekday or evening, by email\n\nKind of noise: Noise on the road\nNoise details: Details\n\nWhere is the noise coming from? A house, flat, park or street\nNoise source: 24 High Street, SW1A 1AA (100000333)\n\nIs the noise happening now? No\nDoes the time of the noise follow a pattern? No\nWhen has the noise occurred? late at night\n";
         is $report->latitude, 53;
+        $mech->clear_emails_ok;
     };
     subtest 'Report new noise, your address missing, source address not a postcode' => sub {
         $mech->get_ok('/noise');
         $mech->submit_form_ok({ button => 'start' });
         $mech->submit_form_ok({ with_fields => { existing => 0 } });
         $mech->submit_form_ok({ with_fields => { name => "Test McTest", email => $user->email, phone => '01234 567890' } });
-        $mech->submit_form_ok({ with_fields => { best_time => [['day', 'evening'], 1], best_method => 'email' } });
+        $mech->submit_form_ok({ with_fields => { best_time => [['weekday', 'evening'], 1], best_method => 'email' } });
         $mech->submit_form_ok({ with_fields => { postcode => 'SW1A 1AA' } });
         $mech->submit_form_ok({ with_fields => { address => 'missing' } });
         $mech->submit_form_ok({ with_fields => { address_manual => 'My Address' } });
@@ -173,7 +174,7 @@ FixMyStreet::override_config {
         $mech->submit_form_ok({ button => 'start' });
         $mech->submit_form_ok({ with_fields => { existing => 0 } });
         $mech->submit_form_ok({ with_fields => { name => "Test McTest", email => $user->email, phone => '01234 567890' } });
-        $mech->submit_form_ok({ with_fields => { best_time => [['day', 'evening'], 1], best_method => 'email' } });
+        $mech->submit_form_ok({ with_fields => { best_time => [['weekday', 'evening'], 1], best_method => 'email' } });
         $mech->submit_form_ok({ with_fields => { postcode => 'SW1A 1AA' } });
         $mech->submit_form_ok({ with_fields => { address => 'missing' } });
         $mech->submit_form_ok({ with_fields => { address_manual => 'My Address' } });
@@ -230,7 +231,8 @@ FixMyStreet::override_config {
         $mech->submit_form_ok({ with_fields => { process => 'summary' } });
         $mech->content_contains('Your additional report has been submitted');
         my $update = $user->comments->first;
-        is $update->text, "Kind of noise: music\nNoise details: Details\n\nIs the noise happening now? Yes\nDoes the time of the noise follow a pattern? Yes\nWhat days does the noise happen? friday, saturday\nWhat time does the noise happen? night\n";
+        is $update->text, "Kind of noise: Music\nNoise details: Details\n\nIs the noise happening now? Yes\nDoes the time of the noise follow a pattern? Yes\nWhat days does the noise happen? Friday, Saturday\nWhat time does the noise happen? Night\n";
+        like $mech->get_text_body_from_email, qr/Kind of noise: Music/;
     };
 };
 
