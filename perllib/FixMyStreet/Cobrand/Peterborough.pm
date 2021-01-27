@@ -225,26 +225,45 @@ sub bin_services_for_address {
     my $self = shift;
     my $property = shift;
 
+    my %service_name_override = (
+        "Empty Bin 240L Black" => "Black",
+        "Empty Bin 240L Brown" => "Brown",
+        "Empty Bin 240L Green" => "Green",
+        "Empty Bin Recycling 1100l" => "Recycling",
+        "Empty Bin Recycling 240l" => "Recycling",
+        "Empty Bin Recycling 660l" => "Recycling",
+        "Empty Bin Refuse 1100l" => "Refuse",
+        "Empty Bin Refuse 240l" => "Refuse",
+        "Empty Bin Refuse 660l" => "Refuse",
+    );
+
     my $bartec = $self->feature('bartec');
     $bartec = Integrations::Bartec->new(%$bartec);
 
+
+    # First get the services that are available for this property...
+    my $schedules = $bartec->Features_Schedules_Get($property->{uprn});
+    # ...and then the actual instances of scheduled collections
     # TODO parallelize these calls
     my $jobs = $bartec->Jobs_FeatureScheduleDates_Get($property->{uprn});
-    my $schedules = $bartec->Features_Schedules_Get($property->{uprn});
-    my %schedules = map { $_->{JobName} => $_ } @$schedules;
+
+    # then create mapping to link them together (keyed on name because that's
+    # all that they appear to share...?!)
+    my %jobs = map { $_->{JobName} => $_ } @$jobs;
 
     my @out;
-
-    foreach (@$jobs) {
-        my $last = construct_bin_date($_->{PreviousDate});
-        my $next = construct_bin_date($_->{NextDate});
+    foreach (@$schedules) {
+        # TODO need to handle properties that have multiple of the same service
+        my $job = $jobs{$_->{JobName}};
+        my $last = construct_bin_date($job->{PreviousDate});
+        my $next = construct_bin_date($job->{NextDate});
         my $row = {
-            id => $_->{JobID},
-            last => { date => $last, ordinal => ordinal($last->day) },
-            next => { date => $next, ordinal => ordinal($next->day) },
-            service_name => $_->{JobDescription},
-            schedule => $schedules{$_->{JobName}}->{Frequency},
-            service_id => $schedules{$_->{JobName}}->{Feature}->{FeatureType}->{ID},
+            id => $_->{ID},
+            last => $last ? { date => $last, ordinal => ordinal($last->day) } : undef,
+            next => $next ? { date => $next, ordinal => ordinal($next->day) } : undef,
+            service_name => $service_name_override{$_->{JobName}} || $_->{JobName},
+            schedule => $_->{Frequency},
+            service_id => $_->{Feature}->{FeatureType}->{ID},
         };
         push @out, $row;
     }
