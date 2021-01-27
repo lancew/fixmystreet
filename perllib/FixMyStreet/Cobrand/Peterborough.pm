@@ -214,14 +214,8 @@ sub image_for_service {
     my $base = '/cobrands/bromley/images/container-images';
     my $images = {
         6533 => "$base/refuse-black-sack",
-        532 => "$base/refuse-black-sack",
-        533 => "$base/large-communal-black",
-        535 => "$base/kerbside-green-box-mix",
         6534 => "$base/small-communal-mix",
-        537 => "$base/kerbside-black-box-paper",
-        541 => "$base/small-communal-paper",
-        542 => "$base/food-green-caddy",
-        544 => "$base/food-communal",
+        6579 => "$base/food-communal",
     };
     return $images->{$service_id};
 }
