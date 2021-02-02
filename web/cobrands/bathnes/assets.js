@@ -238,7 +238,7 @@ fixmystreet.assets.add(fixmystreet.maps.banes_defaults, {
 // List of categories which are Curo Group's responsibility
 var curo_categories = [
     'Allotment issue',
-    'Overgrown public spaces & parks',
+    'Overgrown vegetation in Council parks and green spaces',
     'Play area safety issue',
     'Trees and woodland',
     'Dead animals',
