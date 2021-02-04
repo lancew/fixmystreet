@@ -1215,7 +1215,7 @@ fixmystreet.message_controller = (function() {
         }
     }
 
-    // This shows the reporting form
+    // Show the reporting form, unless the road responsibility message is visible.
     function enable_report_form() {
         if ( $('#js-roads-responsibility').is(':visible') ) {
             return;
