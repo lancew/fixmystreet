@@ -215,24 +215,56 @@ var bin_defaults = $.extend(true, {}, arcgis_defaults, {
     asset_type: 'spot'
 });
 
-fixmystreet.assets.add(bin_defaults, {
+var flytipping_defaults = $.extend(true, {}, arcgis_defaults, {
     http_options: {
       params: {
-        where: "Type='Litter Bin'"
+        outFields: '',
       }
     },
-    asset_category: 'Litter bin',
-    asset_item: 'litter bin'
+    stylemap: fixmystreet.assets.stylemap_invisible,
+    asset_category: ['General fly tipping', 'Hazardous fly tipping', 'Offensive graffiti', 'Non offensive graffiti'  ],
+    non_interactive: true,
+    road: true,
+    asset_item: 'road',
+    asset_type: 'road',
 });
 
-fixmystreet.assets.add(bin_defaults, {
+// PCC Property Combined
+fixmystreet.assets.add(flytipping_defaults, {
     http_options: {
-      params: {
-        where: "Type='Dog Waste Bin'"
-      }
+      url: url_base + '2/query?',
     },
-    asset_category: 'Dog bin',
-    asset_item: 'dog waste bin'
+    actions: {
+        found: function(layer) {
+            $("#js-roads-responsibility").addClass("hidden");
+        },
+        not_found: function() {
+            for ( var i = 0; i < fixmystreet.assets.layers.length; i++ ) {
+                var layer = fixmystreet.assets.layers[i];
+                if ( layer.fixmystreet.name == 'Adopted Highways' && layer.selected_feature ) {
+                    $("#js-roads-responsibility").addClass("hidden");
+                    return;
+                }
+            }
+            $("#js-roads-responsibility").removeClass("hidden");
+            $("#js-roads-responsibility .js-responsibility-message").addClass("hidden");
+            $('#js-environment-message').removeClass('hidden');
+        },
+    }
+});
+
+// PCC Property Leased Out NOT Responsible
+fixmystreet.assets.add(flytipping_defaults, {
+    http_options: {
+      url: url_base + '3/query?',
+    },
+    actions: {
+        found: function() {
+            $("#js-roads-responsibility").removeClass("hidden");
+            $("#js-roads-responsibility .js-responsibility-message").addClass("hidden");
+            $('#js-environment-message').removeClass('hidden');
+        },
+    }
 });
 
 })();
