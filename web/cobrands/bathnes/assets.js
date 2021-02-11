@@ -264,7 +264,7 @@ fixmystreet.assets.add(fixmystreet.maps.banes_defaults, {
     no_asset_msg_id: '#js-curo-group-restriction',
     actions: {
         found: function(layer) {
-            var category = $('select#form_category').val();
+            var category = fixmystreet.reporting.selectedCategory().category;
             if (curo_categories.indexOf(category) === -1) {
                 fixmystreet.message_controller.road_found(layer);
                 return;
