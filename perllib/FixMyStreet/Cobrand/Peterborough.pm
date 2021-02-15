@@ -282,7 +282,10 @@ sub munge_reports_category_list {
 sub munge_report_new_contacts {
     my ($self, $categories) = @_;
 
-    return if $self->{c}->action =~ /^waste/;
+    if ($self->{c}->action =~ /^waste/) {
+        @$categories = grep { $_->get_extra_metadata('waste_only') } @$categories;
+        return;
+    }
 
     @$categories = grep { !$_->get_extra_metadata('waste_only') } @$categories;
     $self->SUPER::munge_report_new_contacts($categories);
@@ -300,7 +303,7 @@ sub _premises_for_postcode {
         my $response = $bartec->Premises_Get($pc);
 
         $self->{c}->session->{$key} = [ map { {
-            id => $_->{UPRN},
+            id =>$pc . ":" . $_->{UPRN},
             uprn => $_->{UPRN},
             address => $self->_format_address($_),
             latitude => $_->{Location}->{Metric}->{Latitude},
@@ -357,9 +360,9 @@ sub bin_services_for_address {
     my $property = shift;
 
     my %service_name_override = (
-        "Empty Bin 240L Black" => "Black",
-        "Empty Bin 240L Brown" => "Brown",
-        "Empty Bin 240L Green" => "Green",
+        "Empty Bin 240L Black" => "Black Bin",
+        "Empty Bin 240L Brown" => "Brown Bin",
+        "Empty Bin 240L Green" => "Green Bin",
         "Empty Bin Recycling 1100l" => "Recycling",
         "Empty Bin Recycling 240l" => "Recycling",
         "Empty Bin Recycling 660l" => "Recycling",
@@ -368,39 +371,118 @@ sub bin_services_for_address {
         "Empty Bin Refuse 660l" => "Refuse",
     );
 
+    $self->{c}->stash->{containers} = {
+        419 => "240L Black",
+        420 => "240L Green",
+    };
+
+    my %container_request_ids = (
+        6533 => [ 419 ], # 240L Black
+        6534 => [ 420 ], # 240L Green
+        6579 => undef, # 240L Brown
+        6836 => undef, # Refuse 1100l
+        6837 => undef, # Refuse 660l
+        6839 => undef, # Refuse 240l
+        6840 => undef, # Recycling 1100l
+        6841 => undef, # Recycling 660l
+        6843 => undef, # Recycling 240l
+        # all bins?
+        # large food caddy?
+        # small food caddy?
+    );
+
+    my %container_removal_ids = (
+        6533 => [ 487 ], # 240L Black
+        6534 => [ 488 ], # 240L Green
+        6579 => [ 489 ], # 240L Brown
+        6836 => undef, # Refuse 1100l
+        6837 => undef, # Refuse 660l
+        6839 => undef, # Refuse 240l
+        6840 => undef, # Recycling 1100l
+        6841 => undef, # Recycling 660l
+        6843 => undef, # Recycling 240l
+        # black 360L?
+    );
+
+    my %container_request_max = (
+        6533 => 1, # 240L Black
+        6534 => 2, # 240L Green (max 2 per household, need to check how many property already has dynamically)
+        6579 => 1, # 240L Brown
+        6836 => undef, # Refuse 1100l
+        6837 => undef, # Refuse 660l
+        6839 => undef, # Refuse 240l
+        6840 => undef, # Recycling 1100l
+        6841 => undef, # Recycling 660l
+        6843 => undef, # Recycling 240l
+        # all bins?
+        # large food caddy?
+        # small food caddy?
+    );
+
     my $bartec = $self->feature('bartec');
     $bartec = Integrations::Bartec->new(%$bartec);
 
-
-    # First get the services that are available for this property...
-    my $schedules = $bartec->Features_Schedules_Get($property->{uprn});
-    # ...and then the actual instances of scheduled collections
     # TODO parallelize these calls
     my $jobs = $bartec->Jobs_FeatureScheduleDates_Get($property->{uprn});
-
-    # then create mapping to link them together (keyed on name because that's
-    # all that they appear to share...?!)
-    my %jobs = map { $_->{JobName} => $_ } @$jobs;
+    my $schedules = $bartec->Features_Schedules_Get($property->{uprn});
+    my %schedules = map { $_->{JobName} => $_ } @$schedules;
 
     my @out;
-    foreach (@$schedules) {
-        # TODO need to handle properties that have multiple of the same service
-        my $job = $jobs{$_->{JobName}};
-        my $last = construct_bin_date($job->{PreviousDate});
-        my $next = construct_bin_date($job->{NextDate});
+
+    foreach (@$jobs) {
+        my $last = construct_bin_date($_->{PreviousDate});
+        my $next = construct_bin_date($_->{NextDate});
+        my $container_id = $schedules{$_->{JobName}}->{Feature}->{FeatureType}->{ID};
+
         my $row = {
-            id => $_->{ID},
-            last => $last ? { date => $last, ordinal => ordinal($last->day) } : undef,
-            next => $next ? { date => $next, ordinal => ordinal($next->day) } : undef,
-            service_name => $service_name_override{$_->{JobName}} || $_->{JobName},
-            schedule => $_->{Frequency},
-            service_id => $_->{Feature}->{FeatureType}->{ID},
+            id => $_->{JobID},
+            last => { date => $last, ordinal => ordinal($last->day) },
+            next => { date => $next, ordinal => ordinal($next->day) },
+            service_name => $service_name_override{$_->{JobDescription}} || $_->{JobDescription},
+            schedule => $schedules{$_->{JobName}}->{Frequency},
+            service_id => $container_id,
+            request_containers => $container_request_ids{$container_id},
+            request_allowed => $container_request_ids{$container_id} ? 1 : 0,
+            request_max => $container_request_max{$container_id} || 0,
         };
         push @out, $row;
     }
 
     return \@out;
 }
+
+sub bin_request_form_extra_fields {
+    my ($self, $service, $container_id, $field_list) = @_;
+
+    if ($container_id == 419) { # Request New Black 240L
+        # Add a new "reason" field
+        push @$field_list, "reason-$container_id" => {
+            type => 'Text',
+            label => 'Why do you need new bins?',
+            tags => {
+                initial_hidden => 1,
+            },
+            required_when => { "container-$container_id" => 1 },
+        };
+        # And make sure it's revealed when the box is ticked
+        my %fields = @$field_list;
+        $fields{"container-$container_id"}{tags}{toggle} .= ", #form-reason-$container_id-row";
+    }
+}
+
+sub waste_munge_request_data {
+    my ($self, $id, $data) = @_;
+
+    my $c = $self->{c};
+
+    my $address = $c->stash->{property}->{address};
+    my $container = $c->stash->{containers}{$id};
+    my $quantity = $data->{"quantity-$id"};
+    $data->{title} = "Request new $container";
+    $data->{detail} = "Quantity: $quantity\n\n$address";
+    $data->{category} = $self->body->contacts->find({ email => "Bartec-$id" })->category;
+}
+
 
 sub _format_address {
     my ($self, $property) = @_;

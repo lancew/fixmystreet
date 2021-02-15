@@ -409,7 +409,10 @@ sub munge_reports_category_list {
 sub munge_report_new_contacts {
     my ($self, $categories) = @_;
 
-    return if $self->{c}->action =~ /^waste/;
+    if ($self->{c}->action =~ /^waste/) {
+        @$categories = grep { grep { $_ eq 'Waste' } @{$_->groups} } @$categories;
+        return;
+    }
 
     @$categories = grep { grep { $_ ne 'Waste' } @{$_->groups} } @$categories;
     $self->SUPER::munge_report_new_contacts($categories);
@@ -927,6 +930,20 @@ sub waste_check_last_update {
         }
     }
     return 1;
+}
+
+sub waste_munge_request_data {
+    my ($self, $id, $data) = @_;
+
+    my $c = $self->{c};
+
+    my $address = $c->stash->{property}->{address};
+    my $container = $c->stash->{containers}{$id};
+    my $quantity = $data->{"quantity-$id"};
+    $data->{title} = "Request new $container";
+    $data->{detail} = "Quantity: $quantity\n\n$address";
+    $c->set_param('Container_Type', $id);
+    $c->set_param('Quantity', $quantity);
 }
 
 sub admin_templates_external_status_code_hook {

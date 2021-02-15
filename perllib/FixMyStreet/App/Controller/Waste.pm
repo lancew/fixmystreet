@@ -137,6 +137,7 @@ sub construct_bin_request_form {
 
     foreach (@{$c->stash->{service_data}}) {
         next unless $_->{next} && !$_->{request_open};
+        my $service = $_;
         my $name = $_->{service_name};
         my $containers = $_->{request_containers};
         my $max = $_->{request_max};
@@ -168,6 +169,7 @@ sub construct_bin_request_form {
                 ],
                 required_when => { "container-$id" => 1 },
             };
+            $c->cobrand->call_hook("bin_request_form_extra_fields", $service, $id, $field_list);
         }
     }
 
@@ -195,16 +197,10 @@ sub request : Chained('property') : Args(0) {
 sub process_request_data : Private {
     my ($self, $c, $form) = @_;
     my $data = $form->saved_data;
-    my $address = $c->stash->{property}->{address};
     my @services = grep { /^container-/ && $data->{$_} } keys %$data;
     foreach (@services) {
         my ($id) = /container-(.*)/;
-        my $container = $c->stash->{containers}{$id};
-        my $quantity = $data->{"quantity-$id"};
-        $data->{title} = "Request new $container";
-        $data->{detail} = "Quantity: $quantity\n\n$address";
-        $c->set_param('Container_Type', $id);
-        $c->set_param('Quantity', $quantity);
+        $c->cobrand->call_hook("waste_munge_request_data", $id, $data);
         $c->forward('add_report', [ $data ]) or return;
         push @{$c->stash->{report_ids}}, $c->stash->{report}->id;
     }
@@ -454,8 +450,6 @@ sub setup_categories_and_bodies : Private {
 
     $c->stash->{all_areas} = $c->stash->{all_areas_mapit} = { $c->cobrand->council_area_id => { id => $c->cobrand->council_area_id } };
     $c->forward('/report/new/setup_categories_and_bodies');
-    my $contacts = $c->stash->{contacts};
-    @$contacts = grep { grep { $_ eq 'Waste' } @{$_->groups} } @$contacts;
 }
 
 sub receive_echo_event_notification : Path('/waste/echo') : Args(0) {

@@ -3,6 +3,7 @@ package Integrations::Bartec;
 use strict;
 use warnings;
 use DateTime;
+use DateTime::Format::W3CDTF;
 use Moo;
 use FixMyStreet;
 
@@ -174,14 +175,23 @@ sub Premises_Get {
 sub Jobs_FeatureScheduleDates_Get {
     my ($self, $uprn, $start, $end) = @_;
 
+    my $w3c = DateTime::Format::W3CDTF->new;
+
+    # how many days either side of today to search for collections if $start/$end aren't given.
+    # The assumption is that collections have a minimum frequency of every two weeks, so a day of wiggle room.
+    my $days_buffer = 15;
+
+    $start = $w3c->format_datetime($start || DateTime->now->subtract(days => $days_buffer));
+    $end = $w3c->format_datetime($end || DateTime->now->add(days => $days_buffer));
+
     my $res = $self->call('Jobs_FeatureScheduleDates_Get', token => $self->token, UPRN => $uprn, DateRange => {
         MinimumDate => {
             attr => { xmlns => "http://www.bartec-systems.com" },
-            value => "2021-01-01T00:00:00",
+            value => $start,
         },
         MaximumDate => {
             attr => { xmlns => "http://www.bartec-systems.com" },
-            value => "2021-01-31T00:00:00",
+            value => $end,
         },
     });
     # XXX proper error handling required
