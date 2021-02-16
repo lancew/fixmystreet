@@ -480,6 +480,10 @@ sub waste_munge_request_data {
     my $quantity = $data->{"quantity-$id"};
     $data->{title} = "Request new $container";
     $data->{detail} = "Quantity: $quantity\n\n$address";
+    if (my $reason = $data->{"reason-$id"}) {
+        $data->{detail} .= "\n\nReason: $reason";
+    }
+
     $data->{category} = $self->body->contacts->find({ email => "Bartec-$id" })->category;
 }
 
