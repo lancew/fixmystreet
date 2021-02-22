@@ -2469,14 +2469,12 @@ label .muted {
 a#geolocate_link {
   border: 1px solid $geolocation-link-border;
   color: $geolocation-link;
+  @include flex-container-inline();
+  @include flex-align($alignment: center);
   @include button-size($button-margin-top: 15px);
   svg {
     display: inline-block;
-    vertical-align: text-bottom;
-    margin-right: .2em;
-    path {
-      fill: currentColor;
-    }
+    margin-#{$right}: .4em;
   }
 }
 
@@ -2484,7 +2482,6 @@ a#geolocate_link {
   display: none !important;
 }
 
-a#geolocate_link.loading,
 .btn--geolocate.loading {
   background: url("/cobrands/fixmystreet/images/spinner-white.gif") flip(100%, 0) 50% no-repeat;
   padding-#{$right}: 1.5em;
