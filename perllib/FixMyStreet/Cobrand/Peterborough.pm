@@ -360,11 +360,11 @@ sub look_up_property {
 sub image_for_service {
     my ($self, $service_id) = @_;
     $self->{c}->log->debug("XXXX $service_id");
-    my $base = '/cobrands/bromley/images/container-images';
+    my $base = '/cobrands/peterborough/images';
     my $images = {
-        6533 => "$base/refuse-black-sack",
-        6534 => "$base/small-communal-mix",
-        6579 => "$base/food-communal",
+        6533 => "$base/black-bin",
+        6534 => "$base/green-bin",
+        6579 => "$base/brown-bin",
     };
     return $images->{$service_id};
 }
