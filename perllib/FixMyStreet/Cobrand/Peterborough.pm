@@ -329,10 +329,10 @@ sub _premises_for_postcode {
     return $self->{c}->session->{$key};
 }
 
-sub _clear_premises_for_postcode_cache {
+sub _clear_cached_postcode_lookup {
     my $self = shift;
-    my $pc = shift;
 
+    my ($pc, $uprn) = split ":", $self->{c}->stash->{property}->{id};
     my $key = "peterborough:bartec:premises_for_postcode:$pc";
 
     delete $self->{c}->session->{$key};
@@ -469,8 +469,15 @@ sub bin_services_for_address {
             schedule => $schedules{$_->{JobName}}->{Frequency},
             service_id => $container_id,
             request_containers => $container_request_ids{$container_id},
+
+            # can this container type be requested?
             request_allowed => $container_request_ids{$container_id} ? 1 : 0,
+            # what's the maximum number of this container that can be request?
             request_max => $container_request_max{$container_id} || 0,
+            # can this collection be reported as having been missed?
+            report_allowed => 1,
+            # is there already a missed collection report open for this container?
+            report_open => 0,
         };
         push @out, $row;
     }
@@ -497,6 +504,22 @@ sub bin_services_for_address {
     };
 
     return \@out;
+}
+
+sub bin_future_collections {
+    my $self = shift;
+
+    my $bartec = $self->feature('bartec');
+    $bartec = Integrations::Bartec->new(%$bartec);
+
+    my $jobs = $bartec->Jobs_FeatureScheduleDates_Get($self->{c}->stash->{property}{uprn});
+
+    my $events = [];
+    foreach (@$jobs) {
+        my $dt = construct_bin_date($_->{NextDate});
+        push @$events, { date => $dt, desc => '', summary => $_->{JobName} };
+    }
+    return $events;
 }
 
 sub bin_request_form_extra_fields {
@@ -534,8 +557,42 @@ sub waste_munge_request_data {
 
     $data->{category} = $self->body->contacts->find({ email => "Bartec-$id" })->category;
 
-    my ($pc, $uprn) = split ":", $c->stash->{property}->{id};
-    $self->_clear_premises_for_postcode_cache($pc);
+    $self->_clear_cached_postcode_lookup;
+}
+
+sub waste_munge_report_data {
+    my ($self, $id, $data) = @_;
+
+
+    use Data::Dumper;
+    warn "XXX $id";
+    warn Dumper($data);
+
+    my %container_service_ids = (
+        6533 => 255, # 240L Black
+        6534 => 254, # 240L Green
+        6579 => 253, # 240L Brown
+        6836 => undef, # Refuse 1100l
+        6837 => undef, # Refuse 660l
+        6839 => undef, # Refuse 240l
+        6840 => undef, # Recycling 1100l
+        6841 => undef, # Recycling 660l
+        6843 => undef, # Recycling 240l
+        # black 360L?
+    );
+
+
+    my $c = $self->{c};
+
+    my $address = $c->stash->{property}->{address};
+    my $service_id = $container_service_ids{$id};
+    my $container = $c->stash->{containers}{$id};
+    $data->{title} = "Report missed $container";
+    $data->{detail} = "$data->{title}\n\n$address";
+
+    $data->{category} = $self->body->contacts->find({ email => "Bartec-$service_id" })->category;
+
+    $self->_clear_cached_postcode_lookup;
 }
 
 

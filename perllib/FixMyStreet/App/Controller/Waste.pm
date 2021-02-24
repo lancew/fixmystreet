@@ -255,14 +255,10 @@ sub report : Chained('property') : Args(0) {
 sub process_report_data : Private {
     my ($self, $c, $form) = @_;
     my $data = $form->saved_data;
-    my $address = $c->stash->{property}->{address};
     my @services = grep { /^service-/ && $data->{$_} } keys %$data;
     foreach (@services) {
         my ($id) = /service-(.*)/;
-        my $service = $c->stash->{services}{$id}{service_name};
-        $data->{title} = "Report missed $service";
-        $data->{detail} = "$data->{title}\n\n$address";
-        $c->set_param('service_id', $id);
+        $c->cobrand->call_hook("waste_munge_report_data", $id, $data);
         $c->forward('add_report', [ $data ]) or return;
         push @{$c->stash->{report_ids}}, $c->stash->{report}->id;
     }

@@ -946,6 +946,18 @@ sub waste_munge_request_data {
     $c->set_param('Quantity', $quantity);
 }
 
+sub waste_munge_report_data {
+    my ($self, $id, $data) = @_;
+
+    my $c = $self->{c};
+
+    my $address = $c->stash->{property}->{address};
+    my $service = $c->stash->{services}{$id}{service_name};
+    $data->{title} = "Report missed $service";
+    $data->{detail} = "$data->{title}\n\n$address";
+    $c->set_param('service_id', $id);
+}
+
 sub admin_templates_external_status_code_hook {
     my ($self) = @_;
     my $c = $self->{c};
