@@ -144,7 +144,7 @@ sub construct_bin_request_form {
     my $field_list = [];
 
     foreach (@{$c->stash->{service_data}}) {
-        next unless $_->{next} && !$_->{request_open};
+        next unless ( $_->{next} && !$_->{request_open} ) || $_->{request_only};
         my $service = $_;
         my $name = $_->{service_name};
         my $containers = $_->{request_containers};

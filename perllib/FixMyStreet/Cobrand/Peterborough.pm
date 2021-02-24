@@ -318,16 +318,24 @@ sub _premises_for_postcode {
         my $response = $bartec->Premises_Get($pc);
 
         $self->{c}->session->{$key} = [ map { {
-            id =>$pc . ":" . $_->{UPRN},
+            id => $pc . ":" . $_->{UPRN},
             uprn => $_->{UPRN},
             address => $self->_format_address($_),
             latitude => $_->{Location}->{Metric}->{Latitude},
             longitude => $_->{Location}->{Metric}->{Longitude},
         } } @$response ];
-        # XXX Need to remove this from session at end of interaction
     }
 
     return $self->{c}->session->{$key};
+}
+
+sub _clear_premises_for_postcode_cache {
+    my $self = shift;
+    my $pc = shift;
+
+    my $key = "peterborough:bartec:premises_for_postcode:$pc";
+
+    delete $self->{c}->session->{$key};
 }
 
 
@@ -359,7 +367,6 @@ sub look_up_property {
 
 sub image_for_service {
     my ($self, $service_id) = @_;
-    $self->{c}->log->debug("XXXX $service_id");
     my $base = '/cobrands/peterborough/images';
     my $images = {
         6533 => "$base/black-bin",
@@ -389,6 +396,11 @@ sub bin_services_for_address {
     $self->{c}->stash->{containers} = {
         419 => "240L Black",
         420 => "240L Green",
+        425 => "All bins",
+        493 => "Both food bins",
+        424 => "Large food caddy",
+        423 => "Small food caddy",
+        428 => "Food bags",
     };
 
     my %container_request_ids = (
@@ -463,13 +475,34 @@ sub bin_services_for_address {
         push @out, $row;
     }
 
+    # Some need to be added manually as they don't appear in Bartec responses
+    # as they're not "real" collection types (e.g. requesting all bins)
+    push @out, {
+        id => "_FOOD_BINS",
+        service_name => "Food bins",
+        service_id => "_FOOD_BINS",
+        request_containers => [ 493, 424, 423, 428 ],
+        request_allowed => 1,
+        request_max => 1,
+        request_only => 1,
+    };
+    push @out, {
+        id => "_ALL_BINS",
+        service_name => "All bins",
+        service_id => "_ALL_BINS",
+        request_containers => [ 425 ],
+        request_allowed => 1,
+        request_max => 1,
+        request_only => 1,
+    };
+
     return \@out;
 }
 
 sub bin_request_form_extra_fields {
     my ($self, $service, $container_id, $field_list) = @_;
 
-    if ($container_id == 419) { # Request New Black 240L
+    if ($container_id =~ /419|425/) { # Request New Black 240L
         # Add a new "reason" field
         push @$field_list, "reason-$container_id" => {
             type => 'Text',
@@ -500,6 +533,9 @@ sub waste_munge_request_data {
     }
 
     $data->{category} = $self->body->contacts->find({ email => "Bartec-$id" })->category;
+
+    my ($pc, $uprn) = split ":", $c->stash->{property}->{id};
+    $self->_clear_premises_for_postcode_cache($pc);
 }
 
 
