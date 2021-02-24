@@ -13,9 +13,7 @@ INCLUDE '_email_top.html';
   <h1 style="[% h1_style %]">Subscribed to [% site_name %] alerts</h1>
   <p style="[% p_style %]">You have been subscribed to [% site_name %] alerts for <a href="[% problem_url %]">[% problem.title %]</a>.</p>
 
-  [% IF unsubscribe_url %]
-  <p style="[% p_style %]"><a href="[% unsubscribe_url %]">Unsubscribe from alerts about new [% site_name %] reports</a></p>
-  [% END %]
+  <p style="[% p_style %]"><a href="[% unsubscribe_url %]">Unsubscribe from alerts about [% problem.title %].</a></p>
 </th>
 
 [% INCLUDE '_email_bottom.html' %]

@@ -200,7 +200,7 @@ sub create_alert : Private {
 
     if ( $c->user_exists && ($c->user->id == $alert->user->id || $c->stash->{can_create_for_another})) {
         $alert->confirm();
-        if ($c->stash->{can_create_for_another}) {
+        if ($c->stash->{can_create_for_another} && $c->user->id != $alert->user->id) {
             # User has been subscribed to the new_updates alert email by a staff member. Send them an email to let them know.
             $c->forward('send_subscribed_email');
         }
@@ -329,7 +329,7 @@ sub send_subscribed_email : Private {
         }
     } );
     $c->stash->{unsubscribe_url} = $c->cobrand->base_url( $c->stash->{alert_options}->{cobrand_data} ) . '/A/' . $token->token;
-    $c->stash->{problem_url} = $c->cobrand->base_url() . '/report/' . $c->stash->{problem}->id;
+    $c->stash->{problem_url} = $c->cobrand->base_url_for_report($c->stash->{problem}) . $c->stash->{problem}->url;
 
     $c->send_email( 'alert-subscribed.txt', { to => $user->email } );
 }
