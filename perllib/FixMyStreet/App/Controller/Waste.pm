@@ -297,6 +297,7 @@ sub enquiry : Chained('property') : Args(0) {
     my $field_list = [];
     foreach (@{$contact->get_metadata_for_input}) {
         next if $_->{code} eq 'service_id' || $_->{code} eq 'uprn' || $_->{code} eq 'property_id';
+        next if $_->{automated} eq 'hidden_field';
         my $type = 'Text';
         $type = 'TextArea' if 'text' eq ($_->{datatype} || '');
         my $required = $_->{required} eq 'true' ? 1 : 0;
@@ -329,9 +330,9 @@ sub enquiry : Chained('property') : Args(0) {
 sub process_enquiry_data : Private {
     my ($self, $c, $form) = @_;
     my $data = $form->saved_data;
-    my $address = $c->stash->{property}->{address};
-    $data->{title} = $data->{category};
-    $data->{detail} = "$data->{category}\n\n$address";
+
+    $c->cobrand->call_hook("waste_munge_enquiry_data", $data);
+
     # Read extra details in loop
     foreach (grep { /^extra_/ } keys %$data) {
         my ($id) = /^extra_(.*)/;

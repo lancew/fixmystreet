@@ -596,6 +596,23 @@ sub waste_munge_report_data {
     $self->_clear_cached_postcode_lookup;
 }
 
+sub waste_munge_enquiry_data {
+    my ($self, $data) = @_;
+
+    my %container_ids = (
+        6533 => "240L Black",
+        6534 => "240L Green",
+        6579 => "240L Brown",
+    );
+
+
+    my $address = $self->{c}->stash->{property}->{address};
+    my $bin = $container_ids{$data->{service_id}};
+    $data->{title} = "Repair: $bin $data->{category}";
+    $data->{detail} = "$data->{title}\n\n$address";
+}
+
+
 
 sub _format_address {
     my ($self, $property) = @_;

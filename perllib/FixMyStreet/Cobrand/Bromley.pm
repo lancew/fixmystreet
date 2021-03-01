@@ -958,6 +958,14 @@ sub waste_munge_report_data {
     $c->set_param('service_id', $id);
 }
 
+sub waste_munge_enquiry_data {
+    my ($self, $data) = @_;
+
+    my $address = $self->{c}->stash->{property}->{address};
+    $data->{title} = $data->{category};
+    $data->{detail} = "$data->{category}\n\n$address";
+}
+
 sub admin_templates_external_status_code_hook {
     my ($self) = @_;
     my $c = $self->{c};
