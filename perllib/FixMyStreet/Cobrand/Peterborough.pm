@@ -474,7 +474,8 @@ sub bin_services_for_address {
             # what's the maximum number of this container that can be request?
             request_max => $container_request_max{$container_id} || 0,
             # can this collection be reported as having been missed?
-            report_allowed => 1,
+            # allowed if we're within 24 hours of the last collection
+            report_allowed => DateTime->now < $last->add(hours => 24),
             # is there already a missed collection report open for this container?
             report_open => 0,
         };
@@ -491,6 +492,7 @@ sub bin_services_for_address {
         request_allowed => 1,
         request_max => 1,
         request_only => 1,
+        report_only => 1,
     };
     push @out, {
         id => "_ALL_BINS",

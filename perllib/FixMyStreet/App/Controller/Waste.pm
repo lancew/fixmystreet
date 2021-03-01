@@ -154,7 +154,7 @@ sub construct_bin_request_form {
                 type => 'Checkbox',
                 apply => [
                     {
-                        when => { "quantity-$id" => sub { $_[0] > 0 } },
+                        when => { "quantity-$id" => sub { $max > 1 && $_[0] > 0 } },
                         check => qr/^1$/,
                         message => 'Please tick the box',
                     },
@@ -164,19 +164,26 @@ sub construct_bin_request_form {
                 tags => { toggle => "form-quantity-$id-row" },
             };
             $name = ''; # Only on first container
-            push @$field_list, "quantity-$id" => {
-                type => 'Select',
-                label => 'Quantity',
-                tags => {
-                    hint => "You can request a maximum of " . NUMWORDS($max) . " containers",
-                    initial_hidden => 1,
-                },
-                options => [
-                    { value => "", label => '-' },
-                    map { { value => $_, label => $_ } } (1..$max),
-                ],
-                required_when => { "container-$id" => 1 },
-            };
+            if ($max == 1) {
+                push @$field_list, "quantity-$id" => {
+                    type => 'Hidden',
+                    default => '1',
+                };
+            } else {
+                push @$field_list, "quantity-$id" => {
+                    type => 'Select',
+                    label => 'Quantity',
+                    tags => {
+                        hint => "You can request a maximum of " . NUMWORDS($max) . " containers",
+                        initial_hidden => 1,
+                    },
+                    options => [
+                        { value => "", label => '-' },
+                        map { { value => $_, label => $_ } } (1..$max),
+                    ],
+                    required_when => { "container-$id" => 1 },
+                };
+            }
             $c->cobrand->call_hook("bin_request_form_extra_fields", $service, $id, $field_list);
         }
     }
@@ -221,7 +228,7 @@ sub construct_bin_report_form {
     my $field_list = [];
 
     foreach (@{$c->stash->{service_data}}) {
-        next unless $_->{last} && $_->{report_allowed} && !$_->{report_open};
+        next unless ( $_->{last} && $_->{report_allowed} && !$_->{report_open}) || $_->{report_only};
         my $id = $_->{service_id};
         my $name = $_->{service_name};
         push @$field_list, "service-$id" => {
