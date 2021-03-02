@@ -235,7 +235,7 @@ sub output_requests : Private {
         unless $limit && $limit <= $default_limit;
 
     my $attr = {
-        order_by => { -desc => 'confirmed' },
+        order_by => { -desc => $c->cobrand->moniker == 'zurich' ? 'created' : 'confirmed' },
         rows => $limit
     };
 
