@@ -243,6 +243,7 @@ sub property : Chained('/') : PathPart('waste') : CaptureArgs(1) {
 
     $c->stash->{service_data} = $c->cobrand->call_hook(bin_services_for_address => $property) || [];
     $c->stash->{services} = { map { $_->{service_id} => $_ } @{$c->stash->{service_data}} };
+    $c->stash->{services_available} = $c->cobrand->call_hook(available_bin_services_for_address => $property) || {};
 }
 
 sub bin_days : Chained('property') : PathPart('') : Args(0) {
@@ -550,7 +551,7 @@ sub process_garden_data : Private {
     $data->{title} = $data->{category};
     $data->{detail} = "$data->{category}\n\n$address";
 
-    $c->set_param('service_id', $data->{service_id});
+    $c->set_param('service_id', $c->stash->{services_available}->{Garden_Waste}->{service_id});
     $c->set_param('Subscription_Type', $c->stash->{garden_subs}->{New});
     $c->set_param('Subscription_Details_Container_Type', $container_types{'Garden Waste'});
     $c->set_param('Subscription_Details_Quantity', $data->{current_bins} + $data->{new_bins});

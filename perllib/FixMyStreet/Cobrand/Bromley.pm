@@ -502,10 +502,26 @@ sub image_for_service {
     return $images->{$service_id};
 }
 
-sub bin_services_for_address {
-    my $self = shift;
-    my $property = shift;
+sub available_bin_services_for_address {
+    my ($self, $property) = @_;
 
+    my $result = $self->{api_serviceunits};
+    return {} unless @$result;
+
+    my $services = {};
+    for my $service ( @$result ) {
+        my $name = $self->service_name_override->{$service->{ServiceId}} || $service->{ServiceName};
+        $name =~ s/ /_/g;
+        $services->{$name} = {
+            service_id => $service->{ServiceId},
+            is_active => $service->{ServiceTasks} != '',
+        };
+    }
+
+    return $services;
+}
+
+sub service_name_override {
     my %service_name_override = (
         531 => 'Non-Recyclable Refuse',
         532 => 'Non-Recyclable Refuse',
@@ -518,6 +534,14 @@ sub bin_services_for_address {
         544 => 'Food Waste',
         545 => 'Garden Waste',
     );
+
+    return \%service_name_override;
+}
+
+
+sub bin_services_for_address {
+    my $self = shift;
+    my $property = shift;
 
     $self->{c}->stash->{containers} = {
         1 => 'Green Box (Plastic)',
@@ -589,7 +613,7 @@ sub bin_services_for_address {
 
         my $containers = $service_to_containers{$_->{ServiceId}};
         my ($open_request) = grep { $_ } map { $open->{request}->{$_} } @$containers;
-        my $service_name = $service_name_override{$_->{ServiceId}} || $_->{ServiceName};
+        my $service_name = $self->service_name_override->{$_->{ServiceId}} || $_->{ServiceName};
         my $row = {
             id => $_->{Id},
             service_id => $_->{ServiceId},
