@@ -474,8 +474,7 @@ sub bin_services_for_address {
             # what's the maximum number of this container that can be request?
             request_max => $container_request_max{$container_id} || 0,
             # can this collection be reported as having been missed?
-            # allowed if we're within 24 hours of the last collection
-            report_allowed => DateTime->now < $last->add(hours => 24),
+            report_allowed => 1,
             # is there already a missed collection report open for this container?
             report_open => 0,
         };
