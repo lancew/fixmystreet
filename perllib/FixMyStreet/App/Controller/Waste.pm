@@ -211,7 +211,8 @@ sub direct_debit_complete : Path('dd_complete') : Args(0) {
     my ($self, $c) = @_;
 
     my $ref = $c->get_param('reference');
-    my $p = $c->model('DB::Problem')->find( id => $ref );
+
+    my $p = $c->model('DB::Problem')->find( { id => $ref } );
 
     $c->stash->{message} = "Direct Debit set up";
     $c->stash->{report} = $p;
