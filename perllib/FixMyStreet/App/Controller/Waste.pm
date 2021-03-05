@@ -185,14 +185,7 @@ sub direct_debit : Path('dd') : Args(0) {
     $c->stash->{town} = pop @parts;
     $c->stash->{address3} = join ', ', @parts;
 
-
-    my $dt = DateTime->now;
-    if ($dt->day < 15) {
-        $dt->set_day(15);
-    } else {
-        $dt->add( months => 1 );
-        $dt->set_day(15);
-    }
+    my $dt = $c->cobrand->waste_get_next_sub_start_day;
 
     my $payment_details = $c->cobrand->feature('payment_gateway');
     $c->stash->{payment_details} = $payment_details;
