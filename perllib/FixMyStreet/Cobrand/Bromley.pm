@@ -973,6 +973,44 @@ sub waste_check_last_update {
     return 1;
 }
 
+sub waste_get_next_sub_start_day {
+    my $self = shift;
+
+    my $start_days = [ 15, 28 ];
+
+    my $dt = DateTime->now;
+    if ( $dt->day <= $start_days->[0] ) {
+        $dt->set_day( $start_days->[0] );
+        if ( $dt > $self->waste_get_next_dd_day ) {
+            return $dt;
+        } else {
+            $dt->set_day( $start_days->[1] );
+        }
+    }
+    if ( $dt->day <= $start_days->[1] ) {
+        if ( $dt > $self->waste_get_next_dd_day ) {
+            return $dt;
+        } else {
+            $dt->set_day( $start_days->[0] );
+            $dt->add( months => 1 );
+        }
+    }
+    return $dt;
+}
+
+sub waste_get_next_dd_day {
+    my $self = shift;
+
+    my $dd_delay = 10; # No days to set up a DD
+
+    my $dt = DateTime->now;
+    my $wd = FixMyStreet::WorkingDays->new(public_holidays => FixMyStreet::Cobrand::UK::public_holidays());
+
+    my $next_day = $wd->add_days( $dt, $dd_delay );
+
+    return $next_day;
+}
+
 sub admin_templates_external_status_code_hook {
     my ($self) = @_;
     my $c = $self->{c};
