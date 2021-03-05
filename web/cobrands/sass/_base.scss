@@ -2466,15 +2466,43 @@ label .muted {
   }
 }
 
+
+
+
 a#geolocate_link {
   border: 1px solid $geolocation-link-border;
   color: $geolocation-link;
   @include flex-container-inline();
   @include flex-align($alignment: center);
   @include button-size($button-margin-top: 15px);
-  svg {
+
+  // Animation for current location loading spinner
+  @keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+         transform:  rotate(360deg);
+    }
+  }
+
+  .geolocate-link__icon {
     display: inline-block;
     margin-#{$right}: .4em;
+
+    .loading & {
+      display: none;
+    }
+  }
+  
+  .geolocate-link__loading {
+    display: none;
+    animation: 1.5s linear infinite spin;
+  
+    .loading & {
+      display: inline-block;
+      margin-#{$right}: .4em;
+    }
   }
 }
 
