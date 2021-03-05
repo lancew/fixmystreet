@@ -248,7 +248,7 @@ FixMyStreet::override_config {
         };
     });
 
-    subtest 'check payment gateway' => sub {
+    subtest 'check new sub credit card payment' => sub {
         $mech->get_ok('/waste/12345/garden');
         $mech->submit_form_ok({ form_number => 2 });
         $mech->submit_form_ok({ with_fields => { existing => 'no' } });
@@ -260,11 +260,28 @@ FixMyStreet::override_config {
                 email => 'test@example.org'
         } });
         $mech->content_contains('Test McTest');
+        $mech->content_contains('£20.00');
         $mech->submit_form_ok({ with_fields => { tandc => 1 } });
         is $mech->res->previous->code, 302, 'payments issues a redirect';
         is $mech->res->previous->header('Location'), "http://example.org/faq", "redirects to payment gateway";
         is $sent_params->{amount}, 2000, 'correct amount used';
-    }
+    };
+
+    subtest 'check new sub direct debit payment' => sub {
+        $mech->get_ok('/waste/12345/garden');
+        $mech->submit_form_ok({ form_number => 2 });
+        $mech->submit_form_ok({ with_fields => { existing => 'no' } });
+        $mech->submit_form_ok({ with_fields => {
+                current_bins => 0,
+                new_bins => 1,
+                payment_method => 'direct_debit',
+                name => 'Test McTest',
+                email => 'test@example.org'
+        } });
+        $mech->content_contains('Test McTest');
+        $mech->submit_form_ok({ with_fields => { tandc => 1 } });
+        $mech->content_like( qr/txtRegularAmount[^>]*"20.00"/, 'payment amount correct');
+    };
 };
 
 done_testing;
