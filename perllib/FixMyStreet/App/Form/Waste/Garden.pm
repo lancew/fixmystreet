@@ -45,6 +45,7 @@ has_page summary => (
         my $data = $form->saved_data;
         my $cost = $form->{c}->cobrand->feature('payment_gateway')->{ggw_cost};
         my $total = ( $data->{new_bins} + $data->{current_bins} ) * $cost;
+        $data->{display_total} = $total / 100;
         $data->{total} = $total;
         return {
             total => { default => $total },

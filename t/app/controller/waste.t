@@ -222,7 +222,7 @@ FixMyStreet::override_config {
     COBRAND_FEATURES => {
         echo => { bromley => { url => 'http://example.org', sample_data => 1 } },
         waste => { bromley => 1 },
-        payment_gateway => { bromley => { cc_url => 'http://example.com', ggw_cost => 20 } },
+        payment_gateway => { bromley => { cc_url => 'http://example.com', ggw_cost => 2000 } },
     },
 }, sub {
     my $sent_params;

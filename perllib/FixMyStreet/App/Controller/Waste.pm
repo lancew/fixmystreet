@@ -87,7 +87,7 @@ sub pay : Path('pay') : Args(0) {
         ref => $p->id,
         request_id => $p->id,
         description => $p->title,
-        amount => $p->get_extra_field( name => 'payment' )->{value} * 100,
+        amount => $p->get_extra_field( name => 'payment' )->{value},
     });
 
     if ( $result ) {
@@ -189,7 +189,7 @@ sub direct_debit : Path('dd') : Args(0) {
 
     my $payment_details = $c->cobrand->feature('payment_gateway');
     $c->stash->{payment_details} = $payment_details;
-    $c->stash->{amount} = $c->stash->{report}->get_extra_field(name => 'payment')->{value},
+    $c->stash->{amount} = sprintf( '%.2f', $c->stash->{report}->get_extra_field(name => 'payment')->{value} / 100 ),
     $c->stash->{reference} = $c->stash->{report}->id;
     $c->stash->{day} = $dt->day;
     $c->stash->{month} = $dt->month;
