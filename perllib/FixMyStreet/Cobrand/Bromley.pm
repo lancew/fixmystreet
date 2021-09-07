@@ -8,7 +8,6 @@ use DateTime::Format::W3CDTF;
 use DateTime::Format::Flexible;
 use File::Temp;
 use Integrations::Echo;
-use Integrations::Pay360;
 use JSON::MaybeXS;
 use List::Util qw(any);
 use Parallel::ForkManager;
@@ -1373,6 +1372,8 @@ sub waste_dd_paid {
 
 sub waste_reconcile_direct_debits {
     my $self = shift;
+
+    require Integrations::Pay360;
 
     my $today = DateTime->now;
     my $start = $today->clone->add( days => -14 );

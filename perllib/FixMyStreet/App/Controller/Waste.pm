@@ -16,7 +16,6 @@ use FixMyStreet::App::Form::Waste::Garden::Modify;
 use FixMyStreet::App::Form::Waste::Garden::Cancel;
 use FixMyStreet::App::Form::Waste::Garden::Renew;
 use Open311::GetServiceRequestUpdates;
-use Integrations::SCP;
 use Digest::MD5 qw(md5_hex);
 
 sub auto : Private {
@@ -153,6 +152,8 @@ sub pay_retry : Path('pay_retry') : Args(0) {
 sub pay : Path('pay') : Args(0) {
     my ($self, $c, $id) = @_;
 
+    require Integrations::SCP;
+
     my $payment = Integrations::SCP->new({
         config => $c->cobrand->feature('payment_gateway')
     });
@@ -231,6 +232,8 @@ sub pay_complete : Path('pay_complete') : Args(2) {
     # need to get some ID Things which I guess we stored in pay
     my $scpReference = $p->get_extra_metadata('scpReference');
     $c->detach( '/page_error_404_not_found' ) unless $scpReference;
+
+    require Integrations::SCP;
 
     my $payment = Integrations::SCP->new(
         config => $c->cobrand->feature('payment_gateway')
